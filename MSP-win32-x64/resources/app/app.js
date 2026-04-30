@@ -2,11 +2,18 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { MongoClient } = require('mongodb');
 const app = express();
 
 const publicPath = path.join(__dirname, 'public');
 const dbPath = path.join(__dirname, 'msp-db.json');
 const debugLogPath = path.join(__dirname, 'msp-debug.log');
+const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || '';
+const mongoDbName = process.env.MONGODB_DB || 'msp_2016';
+const mongoStateCollection = process.env.MONGODB_STATE_COLLECTION || 'state';
+let mongoClient = null;
+let mongoDatabase = null;
+let dbSource = 'json';
 const log = (message) => {
     const line = `${new Date().toISOString()} ${message}`;
     console.log(message);
@@ -762,13 +769,29 @@ const defaultDb = () => ({
     transactions: []
 });
 
-const loadDb = () => {
+const ensureDbShape = (state) => {
+    const next = state && typeof state === 'object' ? state : defaultDb();
+    next.catalog = next.catalog || {};
+    if (!Array.isArray(next.catalog.clothes) || next.catalog.clothes.length === 0) {
+        next.catalog.clothes = buildClothesCatalog();
+    }
+    next.users = Array.isArray(next.users) ? next.users : defaultDb().users;
+    next.actors = Array.isArray(next.actors) ? next.actors : defaultDb().actors;
+    next.inventory = next.inventory || { [DEV_ACTOR_ID]: [] };
+    next.looks = Array.isArray(next.looks) ? next.looks : [];
+    next.movies = Array.isArray(next.movies) ? next.movies : [];
+    next.friends = Array.isArray(next.friends) ? next.friends : [];
+    next.messages = Array.isArray(next.messages) ? next.messages : [];
+    next.wallPosts = Array.isArray(next.wallPosts) ? next.wallPosts : [];
+    next.transactions = Array.isArray(next.transactions) ? next.transactions : [];
+    return next;
+};
+
+const loadJsonDb = () => {
     try {
         if (fs.existsSync(dbPath)) {
-            const existing = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-            existing.catalog = existing.catalog || {};
+            const existing = ensureDbShape(JSON.parse(fs.readFileSync(dbPath, 'utf8')));
             if (!Array.isArray(existing.catalog.clothes) || existing.catalog.clothes.length === 0) {
-                existing.catalog.clothes = buildClothesCatalog();
                 fs.writeFileSync(dbPath, JSON.stringify(existing, null, 2));
             }
             return existing;
@@ -782,7 +805,52 @@ const loadDb = () => {
     return created;
 };
 
-const db = loadDb();
+const loadMongoDb = async () => {
+    if (!mongoUri) {
+        log('[DB] MONGODB_URI nie ustawione, uzywam msp-db.json');
+        return null;
+    }
+
+    try {
+        mongoClient = new MongoClient(mongoUri, {
+            serverSelectionTimeoutMS: 5000
+        });
+        await mongoClient.connect();
+        mongoDatabase = mongoClient.db(mongoDbName);
+        const collection = mongoDatabase.collection(mongoStateCollection);
+        let document = await collection.findOne({ _id: 'main' });
+
+        if (!document) {
+            document = Object.assign({ _id: 'main' }, defaultDb());
+            await collection.insertOne(document);
+            log(`[DB] Utworzono baze MongoDB: ${mongoDbName}.${mongoStateCollection}`);
+        }
+
+        const { _id, ...storedState } = document;
+        const state = ensureDbShape(storedState);
+        await collection.updateOne({ _id: 'main' }, { $set: state }, { upsert: true });
+        dbSource = 'mongodb';
+        log(`[DB] Polaczono z MongoDB: ${mongoDbName}.${mongoStateCollection} (${state.catalog.clothes.length} ubran)`);
+        return state;
+    } catch (err) {
+        dbSource = 'json';
+        log(`[DB] MongoDB niedostepne (${err.message}), uzywam msp-db.json`);
+        if (mongoClient) {
+            await mongoClient.close().catch(() => {});
+        }
+        mongoClient = null;
+        mongoDatabase = null;
+        return null;
+    }
+};
+
+const loadDb = async () => {
+    const mongoState = await loadMongoDb();
+    if (mongoState) return mongoState;
+    return loadJsonDb();
+};
+
+let db = defaultDb();
 
 const isDevCredentials = (requestBody) => {
     const text = Buffer.isBuffer(requestBody) ? requestBody.toString('utf8').toLowerCase() : '';
@@ -1060,6 +1128,17 @@ app.get('/getConfig', (req, res) => {
     });
 });
 
+app.get('/api/db/status', (req, res) => {
+    res.json({
+        source: dbSource,
+        mongoConnected: Boolean(mongoClient && mongoDatabase),
+        mongoDbName,
+        mongoStateCollection,
+        clothes: db.catalog && Array.isArray(db.catalog.clothes) ? db.catalog.clothes.length : 0,
+        users: Array.isArray(db.users) ? db.users.length : 0
+    });
+});
+
 
 app.use((req, res) => {
     log(`[MISS] ${req.method} ${req.url}`);
@@ -1077,5 +1156,13 @@ const startServer = (port) => {
     });
 };
 
-startServer(80);
-startServer(1600);
+const start = async () => {
+    db = await loadDb();
+    startServer(80);
+    startServer(1600);
+};
+
+start().catch((err) => {
+    log(`[START] Nie udalo sie uruchomic serwera: ${err.stack || err.message}`);
+    process.exitCode = 1;
+});
