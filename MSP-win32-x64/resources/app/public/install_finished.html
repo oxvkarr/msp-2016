@@ -1,0 +1,46 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html lang="en">
+<head>
+<link rel="stylesheet" type="text/css" href="style.css" media="screen,projection" />
+
+<script src="AC_OETags-new.js" language="javascript"></script>
+
+</head>
+<body>
+	<div id="bgimage">
+		<img src="landingpage.jpg">
+		<div id="content">
+		<br/><br/><br/><br/><br/>
+		<script language="JavaScript" type="text/javascript">
+		// Version check for Flash9E or Flash9F or Flash9G
+		var hasFlash9E = DetectFlashVer(9, 0, 115);
+		var hasFlash9F = DetectFlashVer(9, 0, 124);
+		var hasFlash9G = DetectFlashVer(9, 0, 151);
+		var hasFlash9H = DetectFlashVer(9, 0, 159);
+
+		if (hasFlash9E || hasFlash9F || hasFlash9G || hasFlash9H)
+		{
+			document.write("<p class='bigtext'>Flash player successfully installed</p><br/><br/><br/><p class='bigtext'>Loading MovieStarPlanet - please wait...</p>");
+			location.href='http://www.moviestarplanet.com';
+		}
+		else
+		{
+			document.write("<p class='bigtext'>Flash player installation did not succeed.</p><br/><br/><br/><p class='bigtextleft'>You probably do not have permissions to install flash player. Please log in a windows user which has permissions to install programs and try again or contact your system administrator.</p>");
+		}
+	
+	</script>
+		
+		</div>
+		<div id="nav">
+			<ul class="nav">
+				<li class="nav"><a class="nav"href="http://www.moviestarplanet.com/about.html">About</a> </li>
+				<li class="nav"><a class="nav"href="http://www.moviestarplanet.com/parents.html">Parents</a> </li>
+				<li class="nav"><a class="nav"href="http://www.moviestarplanet.com/teachers.html">Teachers</a> </li>
+				<li class="nav"><a class="nav"  href="http://www.moviestarplanet.com/terms.html">Terms & Conditions</a> </li>
+				<li class="nav"><a class="nav"href="http://www.moviestarplanet.com/contact.html">Contact</a> </li>
+				<li class="nav">&copy; Copyright 2009 - MovieStarPlanet ApS</li>
+			</ul>
+		</div>
+	</div>
+</body>
+</html> 

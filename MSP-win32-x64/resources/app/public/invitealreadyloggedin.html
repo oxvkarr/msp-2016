@@ -1,0 +1,44 @@
+<!-- saved from url=(0014)about:internet -->
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:fb="http://www.facebook.com/2008/fbml" lang="en" >
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title></title>
+ <script src="http://static.ak.connect.facebook.com/js/api_lib/v0.4/FeatureLoader.js.php" type="text/javascript"></script>
+<script language="JavaScript" type="text/javascript">
+
+//JavaScript Connect methods
+function login()
+{
+//FB.Connect.requireSession( onLoginHandler );
+FB.Connect.requireSession(function()   {   setTimeout('inviteFriends();', 1000);  });
+}
+    
+function inviteFriends()
+{  
+FB.ensureInit(function() 
+  {        var dialog = new FB.UI.FBMLPopupDialog('Invite your friends to join MovieStarPlanet', '');      
+  var fbml = "<fb:fbml>" +          
+  "<fb:request-form type=\"MovieStarPlanet\" style=\"width:750px; height:540px;\" onsubmit=\"return false;\" target=\"_top\" action=\"" +
+  "http://www.facebook.com/home.php?#/apps/application.php?id=87933512670&ref=nf" + "\" method=\"POST\" invite=\"true\" type=\"\" content=\"www.MovieStarPlanet.com - a virtual world where you create cartoons with your own and your friends virtual moviestars. Earn Fame, Fortune and Friends and get new animations and new cool stuff for you moviestar." +  
+  "<fb:req-choice url='http://moviestarplanet.com?" + window.location.search + "' label='Check it out!' />\">" +                 
+  "<fb:multi-friend-selector\tshowborder=\"false\" exclude_ids=\"\" actiontext=\"Invite your friends and earn 500 starcoins for each friend that reaches level 3!\" rows=\"4\" bypass=\"cancel\" showborder=\"false\" />" +      
+  "</fb:request-form>" +               "</fb:fbml>";    
+  dialog.setFBMLContent(fbml);   
+  dialog.setContentWidth(750);     
+  dialog.setContentHeight(540);       
+  dialog.show();   
+ });}
+
+</script>
+</head>
+
+<script language="JavaScript" type="text/javascript">
+<!--
+FB.init("6e3577b6497268b0c2fb0efc63d475ee", "xd_receiver.htm");
+setTimeout('login();', 2000);
+// -->
+</script>
+<body>
+claus
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html lang="en">
+<head>
+<link rel="stylesheet" type="text/css" href="style.css" media="screen,projection" />
+
+<style type="text/css">
+  /*this is what we want the div to look like
+    when it is not showing*/
+  div.loading-invisible{
+    /*make invisible*/
+    visibility:hidden;
+  }
+
+  .spinner_img
+  {
+  }
+  
+  #spinnerdiv
+  {
+	position:absolute;
+	top:47px;
+	left:10px;	
+	display:none;
+  }
+</style>
+
+
+</head>
+<body>
+	
+	<div id="bgimage">
+		<img src="landingpage.jpg">
+		<div id="content">
+	Click the "Get Flashplayer" button below to install flashplayer 9.159.
+	<br/>
+	<br/>
+	
+	<script language="JavaScript" type="text/javascript">
+
+	var isIE  = (navigator.appVersion.indexOf("MSIE") != -1) ? true : false;
+	var isWin = (navigator.appVersion.toLowerCase().indexOf("win") != -1) ? true : false;
+	var isOpera = (navigator.userAgent.indexOf("Opera") != -1) ? true : false;
+	
+	function installButtonClicked(installerFile)
+	{
+		var btn = document.getElementById('installButton');
+		btn.style.visibility = 'hidden';
+		document.getElementById("nav").className = "loading-invisible";
+		var sp = document.getElementById("spinnerdiv");
+		sp.style.display = 'block';
+		this.location.href='http://www.moviestarplanet.com/'+installerFile;
+		document.getElementById("spinnerid").src = "ajax-loader.gif";
+	}
+	
+	var installerFile = (isIE == true) ? "MSP_activex_installer.exe" : "MSP_plugin_installer.exe";
+	var alternateContent = '<form><input id="installButton" type=button value="Get Flashplayer..." onClick="installButtonClicked(\''+installerFile+'\');return false;"/></form><div id="spinnerdiv"><img id="spinnerid" class="spinner_img" src="ajax-loader.gif"/> Loading Flash Player installer. Please wait...</div>';
+    document.write(alternateContent);
+	</script>
+	Click on the "Run" buttons when you see these windows:
+	<br/><br/>
+	<img src="Install1.jpg"><br/><br/>
+	<img src="Install2.jpg">';
+		
+		</div>
+		<div id="nav">
+			<ul class="nav">
+				<li class="nav"><a class="nav"href="http://www.moviestarplanet.com/about.html">About</a> </li>
+				<li class="nav"><a class="nav"href="http://www.moviestarplanet.com/parents.html">Parents</a> </li>
+				<li class="nav"><a class="nav"href="http://www.moviestarplanet.com/teachers.html">Teachers</a> </li>
+				<li class="nav"><a class="nav"  href="http://www.moviestarplanet.com/terms.html">Terms & Conditions</a> </li>
+				<li class="nav"><a class="nav"href="http://www.moviestarplanet.com/contact.html">Contact</a> </li>
+				<li class="nav">&copy; Copyright 2009 - MovieStarPlanet ApS</li>
+			</ul>
+		</div>
+	</div>
+</body>
+</html> 
