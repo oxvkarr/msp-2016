@@ -626,7 +626,7 @@ const loginStatus = () => makeLoginStatus('com.moviestarplanet.valueObjects.Logi
 const serviceLoginStatus = () => makeLoginStatus('com.moviestarplanet.services.userservice.valueObjects.LoginStatus');
 
 const webLoginStatus = () => {
-    return loginStatus();
+    return loginStatus2();
 };
 
 const loginHash = (status) => {
