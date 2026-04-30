@@ -19,7 +19,9 @@ const localHostRules = [
     'MAP cdnlocaltest.moviestarplanet.com 127.0.0.1',
     'MAP cdnlocalrc.moviestarplanet.com 127.0.0.1',
     'MAP cdn.beta.moviestarplanet.com 127.0.0.1',
-    'MAP upload.beta.moviestarplanet.com 127.0.0.1'
+    'MAP upload.beta.moviestarplanet.com 127.0.0.1',
+    'MAP content.mspapis.com 127.0.0.1',
+    'MAP mspapis.com 127.0.0.1'
 ].join(', ');
 
 app.commandLine.appendSwitch('ppapi-flash-path', flashPath);
@@ -52,7 +54,8 @@ function redirectExternalMspRequests() {
             '*://*.moviestarplanet.ie/*',
             '*://*.moviestarplanet.es/*',
             '*://*.moviestarplanet.it/*',
-            '*://*.moviestarplanet.br/*'
+            '*://*.moviestarplanet.br/*',
+            '*://*.mspapis.com/*'
         ]
     };
 

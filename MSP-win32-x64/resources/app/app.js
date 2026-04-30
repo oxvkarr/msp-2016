@@ -47,7 +47,8 @@ app.get('/cdnpath.txt', (req, res) => {
 
 const sanitizeLocalMap = (text) => text
     .replace(/https?:\/\/(?:localcdn|cdn|upload|cdndev|cdnlocaldev|cdnlocaltest|cdnlocalrc|cdn\.alpha|upload\.alpha|cdn\.beta|upload\.beta|cdn\.rc|uploadtest|cdntest|cdnupload)\.moviestarplanet(?:\.[a-z]+)?(?:\.[a-z]+)?\//gi, 'http://127.0.0.1/')
-    .replace(/https?:\/\/(?:alpha|beta|dev|test|rc|www|info)\.moviestarplanet(?:\.[a-z]+)?(?:\.[a-z]+)?\//gi, 'http://127.0.0.1/');
+    .replace(/https?:\/\/(?:alpha|beta|dev|test|rc|www|info)\.moviestarplanet(?:\.[a-z]+)?(?:\.[a-z]+)?\//gi, 'http://127.0.0.1/')
+    .replace(/https?:\/\/(?:content\.)?mspapis\.com\//gi, 'http://127.0.0.1/');
 
 app.get(['/languagemaps.txt', '/localization/languagemaps.txt'], (req, res) => {
     const filePath = path.join(publicPath, req.path.replace(/^\/+/, ''));
