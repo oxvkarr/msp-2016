@@ -48,7 +48,8 @@ app.get('/cdnpath.txt', (req, res) => {
 const sanitizeLocalMap = (text) => text
     .replace(/https?:\/\/(?:localcdn|cdn|upload|cdndev|cdnlocaldev|cdnlocaltest|cdnlocalrc|cdn\.alpha|upload\.alpha|cdn\.beta|upload\.beta|cdn\.rc|uploadtest|cdntest|cdnupload)\.moviestarplanet(?:\.[a-z]+)?(?:\.[a-z]+)?\//gi, 'http://127.0.0.1/')
     .replace(/https?:\/\/(?:alpha|beta|dev|test|rc|www|info)\.moviestarplanet(?:\.[a-z]+)?(?:\.[a-z]+)?\//gi, 'http://127.0.0.1/')
-    .replace(/https?:\/\/(?:content\.)?mspapis\.com\//gi, 'http://127.0.0.1/');
+    .replace(/https?:\/\/(?:[a-z0-9-]+\.)?mspapis\.com\//gi, 'http://127.0.0.1/')
+    .replace(/https?:\/\/(?:[a-z0-9-]+\.)?mspcdns\.com\//gi, 'http://127.0.0.1/');
 
 app.get(['/languagemaps.txt', '/localization/languagemaps.txt'], (req, res) => {
     const filePath = path.join(publicPath, req.path.replace(/^\/+/, ''));
@@ -69,6 +70,23 @@ app.get(/^\/(?:null)?lookdata_[0-9_]+$/i, (req, res) => {
 
 app.get(/^\/Main_20161102_160430\.swf$/i, (req, res) => {
     res.type('application/x-shockwave-flash').sendFile(path.join(publicPath, 'main_20161102_160430.swf'));
+});
+
+app.get(/^\/msp\/[^/]+\/(.+)$/i, (req, res, next) => {
+    const requestedPath = req.params[0];
+    if (!requestedPath || requestedPath.includes('..')) {
+        next();
+        return;
+    }
+
+    const filePath = path.join(publicPath, requestedPath);
+    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+        next();
+        return;
+    }
+
+    log(`[VERSIONED ASSET] ${req.url} -> ${filePath}`);
+    res.sendFile(filePath);
 });
 
 app.all('/translations/crossdomain.xml', (req, res) => {
