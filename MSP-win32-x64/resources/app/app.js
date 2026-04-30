@@ -534,10 +534,13 @@ const devActorDetails = () => typed('com.moviestarplanet.usersession.valueobject
     ActorRelationships: []
 });
 
-const postLoginSequence = () => typed('com.moviestarplanet.valueObjects.PostLoginSequenceDomain', {
+const makePostLoginSequence = (className) => typed(className, {
     ShowCampaign: false,
     ShowVipRebuy: false
 });
+
+const postLoginSequence = () => makePostLoginSequence('com.moviestarplanet.valueObjects.PostLoginSequenceDomain');
+const servicePostLoginSequence = () => makePostLoginSequence('com.moviestarplanet.services.userservice.valueObjects.PostLoginSequenceDomain');
 
 const loginActorPersonalInfo = () => typed('com.moviestarplanet.usersession.valueobjects.ActorPersonalInfo', {
     ActorId: DEV_ACTOR_ID,
@@ -626,15 +629,15 @@ const loginActorDetails = () => typed('com.moviestarplanet.usersession.valueobje
     ActorRelationships: []
 });
 
-const makeLoginStatus = (className) => typed(className, {
+const makeLoginStatus = (className, postLoginSeq = postLoginSequence()) => typed(className, {
     status: 'LoggedIn',
     actor: loginActorDetails(),
     statusDetails: '',
-    actorLocale: ['en_US'],
-    lbs: [],
+    actorLocale: 'en_US',
+    lbs: null,
     userType: 'Admin',
-    adCountryMap: [],
-    postLoginSeq: postLoginSequence(),
+    adCountryMap: null,
+    postLoginSeq,
     previousLastLogin: '',
     version: '20161102_160430',
     userIp: 2130706433,
@@ -642,7 +645,7 @@ const makeLoginStatus = (className) => typed(className, {
 });
 
 const loginStatus = () => makeLoginStatus('com.moviestarplanet.valueObjects.LoginStatus');
-const serviceLoginStatus = () => makeLoginStatus('com.moviestarplanet.services.userservice.valueObjects.LoginStatus');
+const serviceLoginStatus = () => makeLoginStatus('com.moviestarplanet.services.userservice.valueObjects.LoginStatus', servicePostLoginSequence());
 
 const webLoginStatus = () => {
     return loginStatus2();
