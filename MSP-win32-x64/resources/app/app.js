@@ -356,11 +356,16 @@ const previewValue = (value, limit = 900) => {
 
 const buildAmfResponse = (version, responseUri, value, options = {}) => {
     let body;
+    let usedAmfjs = true;
     try {
         body = amfjsBody(value, options.amf3);
     } catch (err) {
         log(`[AMFJS FALLBACK] ${err.message}`);
+        usedAmfjs = false;
         body = options.amf3 ? amf0Amf3Value(value) : amf0Value(value);
+    }
+    if (options.debugLabel) {
+        log(`[AMF RESPONSE] ${options.debugLabel} amf=${options.amf3 ? 'AMF3' : 'AMF0'} encoder=${usedAmfjs ? 'amfjs' : 'legacy'} length=${body.length} hex=${body.slice(0, 32).toString('hex')}`);
     }
     const length = Buffer.alloc(4);
     length.writeInt32BE(body.length);
@@ -1120,6 +1125,7 @@ const genericWriteResult = (method, leaf) => {
 
 const shouldUseAmf3 = (method, result) => {
     if (result && typeof result === 'object' && result.__class) return true;
+    if (/MovieStarPlanet\.WebService\.User\.AMFUserServiceWeb\.Login/i.test(method)) return false;
     return /Login|LoadDataForRegisterNewUser|LoadActorDetails|UserSession|UserService|MovieStar|Shopping|Shop|Spending|Profile|Friend|Movie|Look|News|Quest|Gift|Admin|Payment|Messaging|Room|Inventory|Wardrobe|Logging/i.test(method);
 };
 
@@ -1229,7 +1235,8 @@ app.all('/Gateway.aspx', (req, res) => {
     }
     const result = getAmfResultForMethod(method);
     res.type('application/x-amf').send(buildAmfResponse(envelope ? envelope.version : 0, responseUri, result, {
-        amf3: shouldUseAmf3(method, result)
+        amf3: shouldUseAmf3(method, result),
+        debugLabel: method
     }));
 });
 
