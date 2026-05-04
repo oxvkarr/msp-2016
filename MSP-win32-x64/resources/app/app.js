@@ -1130,7 +1130,6 @@ const genericWriteResult = (method, leaf) => {
 
 const shouldUseAmf3 = (method, result) => {
     if (result && typeof result === 'object' && result.__class) return true;
-    if (/MovieStarPlanet\.WebService\.User\.AMFUserServiceWeb\.Login/i.test(method)) return false;
     return /Login|LoadDataForRegisterNewUser|LoadActorDetails|UserSession|UserService|MovieStar|Shopping|Shop|Spending|Profile|Friend|Movie|Look|News|Quest|Gift|Admin|Payment|Messaging|Room|Inventory|Wardrobe|Logging/i.test(method);
 };
 
