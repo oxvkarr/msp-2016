@@ -718,11 +718,16 @@ const makeLoginStatus = (className, postLoginSeq = postLoginSequence()) => typed
     previousLastLogin: '',
     version: '20161102_160430',
     userIp: 2130706433,
-    ticket: 'local-admin-ticket'
+    ticket: 'local-admin-ticket',
+    piggyBank: null,
+    mutedUntil: null,
+    helpMessage: '',
+    purchaseTypeId: 0,
+    amsHash: ''
 });
 
 const loginStatus = () => makeLoginStatus('com.moviestarplanet.valueObjects.LoginStatus');
-const serviceLoginStatus = () => makeLoginStatus('com.moviestarplanet.services.userservice.valueObjects.LoginStatus', servicePostLoginSequence());
+const serviceLoginStatus = () => makeLoginStatus('com.moviestarplanet.services.userservice.valueObjects.LoginStatus', null);
 
 const webLoginStatus = () => {
     return loginStatus2();
