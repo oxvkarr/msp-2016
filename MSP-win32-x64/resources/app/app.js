@@ -2,6 +2,8 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { Readable, Writable } = require('stream');
+const amfjs = require('amfjs');
 const { MongoClient } = require('mongodb');
 const app = express();
 
@@ -288,8 +290,69 @@ const typed = (__class, object) => Object.assign({ __class }, object);
 
 const amf0Amf3Value = (value) => Buffer.concat([Buffer.from([0x11]), amf3Value(value)]);
 
+const toAmfSerializable = (value) => {
+    if (value === undefined || value === null) return value;
+    if (value instanceof Date || Buffer.isBuffer(value)) return value;
+    if (Array.isArray(value)) return value.map(toAmfSerializable);
+    if (typeof value !== 'object') return value;
+
+    const output = new amfjs.Serializable(value.__class || '');
+    Object.keys(value).forEach((key) => {
+        if (key !== '__class') {
+            output[key] = toAmfSerializable(value[key]);
+        }
+    });
+    return output;
+};
+
+const amfjsBody = (value, useAmf3) => {
+    const chunks = [];
+    const sink = new Writable({
+        write(chunk, encoding, callback) {
+            chunks.push(Buffer.from(chunk));
+            callback();
+        }
+    });
+    const encoder = new amfjs.AMFEncoder(sink);
+    const encodedValue = toAmfSerializable(value);
+
+    if (useAmf3) {
+        encoder.encode(encodedValue, amfjs.AMF3);
+    } else {
+        encoder.writeObject(encodedValue, amfjs.AMF0);
+    }
+
+    return Buffer.concat(chunks);
+};
+
+const decodeAmfjsBody = (body) => {
+    if (!Buffer.isBuffer(body) || body.length === 0) return null;
+    const stream = Readable.from(body);
+    const decoder = new amfjs.AMFDecoder(stream);
+    return decoder.decode(amfjs.AMF0);
+};
+
+const previewValue = (value, limit = 900) => {
+    const seen = new WeakSet();
+    const text = JSON.stringify(value, (key, innerValue) => {
+        if (typeof innerValue === 'object' && innerValue !== null) {
+            if (seen.has(innerValue)) return '[Circular]';
+            seen.add(innerValue);
+        }
+        if (Buffer.isBuffer(innerValue)) return `[Buffer ${innerValue.length}]`;
+        return innerValue;
+    });
+    return text && text.length > limit ? `${text.slice(0, limit)}...` : text;
+};
+
 const buildAmfResponse = (version, responseUri, value, options = {}) => {
-    const body = options.amf3 ? amf0Amf3Value(value) : amf0Value(value);
+    let body;
+    try {
+        body = amfjsBody(value, options.amf3);
+    } catch (err) {
+        log(`[AMFJS FALLBACK] ${err.message}`);
+        body = options.amf3 ? amf0Amf3Value(value) : amf0Value(value);
+    }
     const length = Buffer.alloc(4);
     length.writeInt32BE(body.length);
     const envelope = Buffer.alloc(4);
@@ -1143,6 +1206,14 @@ app.all('/Gateway.aspx', (req, res) => {
     const envelope = parseAmfEnvelope(req.body);
     const responseUri = envelope && envelope.messages[0] ? envelope.messages[0].response : '/1';
     log(`[AMF] ${req.method} /Gateway.aspx method=${method} body=${size} bytes response=${responseUri}`);
+    if (envelope && envelope.messages[0]) {
+        try {
+            const decodedBody = decodeAmfjsBody(envelope.messages[0].body);
+            log(`[AMF DECODE] target=${envelope.messages[0].target} args=${previewValue(decodedBody)}`);
+        } catch (err) {
+            log(`[AMF DECODE MISS] target=${envelope.messages[0].target} error=${err.message}`);
+        }
+    }
     if ((method.endsWith('Login') || method.endsWith('Login2')) && !isDevCredentials(req.body)) {
         log(`[DEV LOGIN] accepting local dev login as ${DEV_USERNAME}/${DEV_PASSWORD}`);
     }
