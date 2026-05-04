@@ -669,11 +669,12 @@ const loginStatus2 = () => {
     const status = serviceLoginStatus();
     const hash = loginHash(status);
     const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
-    return typed('com.moviestarplanet.services.userservice.valueObjects.LoginStatus2', {
+    delete status.__class;
+    return {
         loginStatus: status,
         hDetails,
         hash
-    });
+    };
 };
 
 const createNewUserStatus = () => typed('com.moviestarplanet.services.userservice.valueObjects.CreateNewUserStatus', {
