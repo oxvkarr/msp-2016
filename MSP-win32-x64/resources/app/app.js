@@ -630,13 +630,13 @@ const loginActorDetails = () => typed('com.moviestarplanet.usersession.valueobje
 });
 
 const makeLoginStatus = (className, postLoginSeq = postLoginSequence()) => typed(className, {
-    status: 'LoggedIn',
+    status: 'Success',
     actor: loginActorDetails(),
     statusDetails: '',
-    actorLocale: 'en_US',
-    lbs: null,
+    actorLocale: ['en_US'],
+    lbs: [],
     userType: 'Admin',
-    adCountryMap: null,
+    adCountryMap: [],
     postLoginSeq,
     previousLastLogin: '',
     version: '20161102_160430',
@@ -668,9 +668,10 @@ const loginHash = (status) => {
 const loginStatus2 = () => {
     const status = serviceLoginStatus();
     const hash = loginHash(status);
+    const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
     return typed('com.moviestarplanet.services.userservice.valueObjects.LoginStatus2', {
         loginStatus: status,
-        hDetails: hash,
+        hDetails,
         hash
     });
 };
