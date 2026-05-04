@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { Readable, Writable } = require('stream');
+const { Writable } = require('stream');
 const amfjs = require('amfjs');
 const { MongoClient } = require('mongodb');
 const app = express();
@@ -327,8 +327,17 @@ const amfjsBody = (value, useAmf3) => {
 
 const decodeAmfjsBody = (body) => {
     if (!Buffer.isBuffer(body) || body.length === 0) return null;
-    const stream = Readable.from(body);
-    const decoder = new amfjs.AMFDecoder(stream);
+    let offset = 0;
+    const reader = {
+        read(length = 1) {
+            if (offset >= body.length) return null;
+            const end = Math.min(offset + length, body.length);
+            const chunk = body.slice(offset, end);
+            offset = end;
+            return chunk;
+        }
+    };
+    const decoder = new amfjs.AMFDecoder(reader);
     return decoder.decode(amfjs.AMF0);
 };
 
@@ -1208,6 +1217,7 @@ app.all('/Gateway.aspx', (req, res) => {
     log(`[AMF] ${req.method} /Gateway.aspx method=${method} body=${size} bytes response=${responseUri}`);
     if (envelope && envelope.messages[0]) {
         try {
+            log(`[AMF BODY] target=${envelope.messages[0].target} length=${envelope.messages[0].body.length} hex=${envelope.messages[0].body.slice(0, 32).toString('hex')}`);
             const decodedBody = decodeAmfjsBody(envelope.messages[0].body);
             log(`[AMF DECODE] target=${envelope.messages[0].target} args=${previewValue(decodedBody)}`);
         } catch (err) {
