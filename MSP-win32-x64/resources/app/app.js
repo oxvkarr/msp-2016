@@ -654,18 +654,15 @@ const webLoginStatus = () => {
 const loginHash = (status) => {
     const actor = status.actor || {};
     const values = [
-        actor.ActorId,
-        actor.Name,
-        actor.Level,
-        actor.Money,
-        actor.Fame,
-        actor.Fortune,
-        actor.Diamonds,
-        actor.Moderator,
         status.status,
-        status.ticket
+        actor.ActorId,
+        actor.Moderator,
+        actor.Money,
+        actor.Diamonds,
+        actor.Fame,
+        actor.Level
     ].map((value) => value === undefined || value === null ? '' : String(value));
-    return crypto.createHash('md5').update(values.join('....'), 'utf8').digest('hex');
+    return crypto.createHash('md5').update(`idu!2*;d${values.join('')}`, 'utf8').digest('hex');
 };
 
 const loginStatus2 = () => {
@@ -673,7 +670,8 @@ const loginStatus2 = () => {
     const hash = loginHash(status);
     return typed('com.moviestarplanet.services.userservice.valueObjects.LoginStatus2', {
         loginStatus: status,
-        hDetails: hash
+        hDetails: hash,
+        hash
     });
 };
 
