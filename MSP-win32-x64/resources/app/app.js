@@ -1047,7 +1047,7 @@ const genericWriteResult = (method, leaf) => {
 
 const shouldUseAmf3 = (method, result) => {
     if (result && typeof result === 'object' && result.__class) return true;
-    return /Login|LoadDataForRegisterNewUser|LoadActorDetails|UserSession|UserService|MovieStar|Shopping|Shop|Spending|Profile|Friend|Movie|Look|News|Quest|Gift|Admin|Payment|Messaging|Room|Inventory|Wardrobe/i.test(method);
+    return /Login|LoadDataForRegisterNewUser|LoadActorDetails|UserSession|UserService|MovieStar|Shopping|Shop|Spending|Profile|Friend|Movie|Look|News|Quest|Gift|Admin|Payment|Messaging|Room|Inventory|Wardrobe|Logging/i.test(method);
 };
 
 const getAmfResultForMethod = (method) => {
@@ -1065,6 +1065,19 @@ const getAmfResultForMethod = (method) => {
     }
     if (method.endsWith('GetCurrentPaymentPossibilities')) {
         return [];
+    }
+    if (method.endsWith('ClientLog') || method.endsWith('LogClient')) {
+        log(`[CLIENT LOG] ${method}`);
+        return true;
+    }
+    if (method.endsWith('CreateTestException')) {
+        return true;
+    }
+    if (method.endsWith('GetLatestServerException')) {
+        return {
+            Version: '20161102_160430',
+            Exception: ''
+        };
     }
     if (method.endsWith('GetRandomLookByLikes')) {
         return looksList()[0];
