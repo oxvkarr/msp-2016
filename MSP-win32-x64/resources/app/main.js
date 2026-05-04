@@ -1,8 +1,10 @@
 const { app, BrowserWindow, session } = require('electron');
 const path = require('path');
+const fs = require('fs');
 require('./app');
 
 const flashPath = path.join(__dirname, 'pepflashplayer.dll');
+const debugLogPath = path.join(__dirname, 'msp-debug.log');
 const LOCAL_BASE_URL = 'http://127.0.0.1';
 const localHostRules = [
     'MAP 127.0.0.1translations 127.0.0.1',
@@ -38,6 +40,12 @@ app.commandLine.appendSwitch('allow-running-insecure-content');
 app.commandLine.appendSwitch('host-rules', localHostRules);
 
 let mainWindow;
+
+const debugLog = (message) => {
+    const line = `${new Date().toISOString()} ${message}`;
+    console.log(message);
+    fs.appendFile(debugLogPath, `${line}\n`, () => {});
+};
 
 function redirectExternalMspRequests() {
     const filter = {
@@ -98,6 +106,21 @@ function createWindow() {
     });
 
     mainWindow.webContents.openDevTools({ mode: 'detach' });
+    mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+        debugLog(`[WINDOW CONSOLE] level=${level} ${sourceId || ''}:${line || 0} ${message}`);
+    });
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+        debugLog(`[WINDOW LOAD FAIL] code=${errorCode} url=${validatedURL} ${errorDescription}`);
+    });
+    mainWindow.webContents.on('plugin-crashed', (event, name, version) => {
+        debugLog(`[PLUGIN CRASHED] ${name || 'unknown'} ${version || ''}`);
+    });
+    mainWindow.webContents.on('crashed', () => {
+        debugLog('[RENDERER CRASHED]');
+    });
+    mainWindow.on('unresponsive', () => {
+        debugLog('[WINDOW UNRESPONSIVE]');
+    });
     mainWindow.loadURL('http://127.0.0.1/play.html');
 }
 
