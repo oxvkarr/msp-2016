@@ -710,7 +710,7 @@ const makeLoginStatus = (className, postLoginSeq = postLoginSequence()) => typed
     status: 'Success',
     actor: loginActorDetails(),
     statusDetails: '',
-    actorLocale: ['en_US'],
+    actorLocale: [],
     lbs: [],
     userType: 'Admin',
     adCountryMap: [],
