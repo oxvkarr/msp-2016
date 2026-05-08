@@ -22,10 +22,14 @@ const defaultRemoteAssetBaseUrl = 'https://pub-2ec8e3c2f0a24e46ab1defac06482eb3.
 const defaultRemoteGatewayUrl = 'https://msp-2016.onrender.com';
 const remoteAssetBaseUrl = (process.env.REMOTE_ASSET_BASE_URL || defaultRemoteAssetBaseUrl).replace(/\/+$/, '');
 const remoteGatewayUrl = (process.env.REMOTE_GATEWAY_URL || defaultRemoteGatewayUrl).replace(/\/+$/, '');
-const remoteGatewayTimeoutMs = Number(process.env.REMOTE_GATEWAY_TIMEOUT_MS || 60000);
+const remoteGatewayTimeoutMs = Number(process.env.REMOTE_GATEWAY_TIMEOUT_MS || 15000);
 const isDebugMode = process.env.MSP_DEBUG === '1';
 const isServerOnly = process.env.MSP_SERVER_ONLY === '1' || process.argv.includes('--server');
 const useRemoteGateway = Boolean(remoteGatewayUrl) && !isServerOnly;
+const shouldProxyRemoteGateway = (method) => {
+    if (!useRemoteGateway) return false;
+    return /MovieStarPlanet\.WebService\.User\.(AMFUserServiceWeb|AMFUserService)\.(Login|Login2|CreateNewUser|CreateNewUserOld)$/i.test(method || '');
+};
 const configuredPort = process.env.PORT || process.env.MSP_PORT || '';
 const normalizeLocaleCode = (value) => {
     const parts = String(value || 'pl_PL').replace('-', '_').split('_');
@@ -39,7 +43,7 @@ let mongoClient = null;
 let mongoDatabase = null;
 let dbSource = 'json';
 const recentLogs = [];
-const isDebugLogRequest = (req) => req.path === '/api/debug/logs';
+const isDebugLogRequest = (req) => req.path === '/api/debug/logs' || req.path === '/api/db/status';
 const log = (message) => {
     const line = `${new Date().toISOString()} ${message}`;
     recentLogs.push(line);
@@ -728,6 +732,10 @@ app.get(/^\/Main_20161102_160430\.swf$/i, async (req, res, next) => {
         return;
     }
     next();
+});
+
+app.get('/dictionaries/Global/instantBlocking.txt', (req, res) => {
+    res.type('text/plain').send('');
 });
 
 app.get(/^\/msp\/[^/]+\/(.+)$/i, (req, res, next) => {
@@ -2129,7 +2137,7 @@ const handleLocalGatewayRequest = async (req, res, fallbackReason = '') => {
 
 app.all('/Gateway.aspx', async (req, res) => {
     const method = req.query.method || '';
-    if (proxyGatewayRequest(req, res, method, (reason) => handleLocalGatewayRequest(req, res, reason))) {
+    if (shouldProxyRemoteGateway(method) && proxyGatewayRequest(req, res, method, (reason) => handleLocalGatewayRequest(req, res, reason))) {
         return;
     }
     await handleLocalGatewayRequest(req, res);
