@@ -87,9 +87,9 @@ const fallbackPlayHtml = () => `<!doctype html>
             right: 14px;
             bottom: 14px;
             z-index: 999999;
-            width: 520px;
+            width: 560px;
             max-width: calc(100vw - 28px);
-            height: 360px;
+            height: 420px;
             display: none;
             overflow: hidden;
             border: 1px solid rgba(255,255,255,.18);
@@ -148,6 +148,49 @@ const fallbackPlayHtml = () => `<!doctype html>
             color: #fff;
             font-size: 13px;
         }
+        #debug-lights {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+        }
+        .debug-light {
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 7px;
+            border-radius: 6px;
+            background: rgba(255,255,255,.07);
+            color: #b7c4dd;
+            font: 11px Arial, sans-serif;
+        }
+        .debug-light-dot {
+            width: 9px;
+            height: 9px;
+            flex: 0 0 auto;
+            border-radius: 999px;
+            background: #6b7280;
+            box-shadow: 0 0 0 2px rgba(255,255,255,.08);
+        }
+        .debug-light.good .debug-light-dot {
+            background: #22c55e;
+            box-shadow: 0 0 10px rgba(34,197,94,.8);
+        }
+        .debug-light.warn .debug-light-dot {
+            background: #f59e0b;
+            box-shadow: 0 0 10px rgba(245,158,11,.8);
+        }
+        .debug-light.bad .debug-light-dot {
+            background: #ef4444;
+            box-shadow: 0 0 10px rgba(239,68,68,.8);
+        }
+        .debug-light span:last-child {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
         #debug-filter-row {
             display: flex;
             gap: 6px;
@@ -167,7 +210,7 @@ const fallbackPlayHtml = () => `<!doctype html>
             font: 12px Consolas, monospace;
         }
         #debug-log {
-            height: 232px;
+            height: 262px;
             margin: 0;
             padding: 10px;
             overflow: auto;
@@ -200,6 +243,13 @@ const fallbackPlayHtml = () => `<!doctype html>
             <div class="debug-stat">AMF<strong id="debug-amf">0</strong></div>
             <div class="debug-stat">Assety<strong id="debug-assets">0</strong></div>
         </section>
+        <section id="debug-lights">
+            <div id="light-server" class="debug-light warn"><span class="debug-light-dot"></span><span>Serwer</span></div>
+            <div id="light-assets" class="debug-light warn"><span class="debug-light-dot"></span><span>Pliki</span></div>
+            <div id="light-locale" class="debug-light warn"><span class="debug-light-dot"></span><span>PL</span></div>
+            <div id="light-amf" class="debug-light warn"><span class="debug-light-dot"></span><span>AMF</span></div>
+            <div id="light-db" class="debug-light warn"><span class="debug-light-dot"></span><span>Baza</span></div>
+        </section>
         <div id="debug-filter-row">
             <input id="debug-filter" placeholder="Filtr logów, np. Gateway albo MISS">
             <button id="debug-scroll" class="secondary" type="button">Bottom</button>
@@ -220,6 +270,13 @@ const fallbackPlayHtml = () => `<!doctype html>
             var reqStat = document.getElementById('debug-req');
             var amfStat = document.getElementById('debug-amf');
             var assetStat = document.getElementById('debug-assets');
+            var lights = {
+                server: document.getElementById('light-server'),
+                assets: document.getElementById('light-assets'),
+                locale: document.getElementById('light-locale'),
+                amf: document.getElementById('light-amf'),
+                db: document.getElementById('light-db')
+            };
             var allLines = [];
             var counters = { req: 0, amf: 0, assets: 0 };
             var paused = false;
@@ -235,6 +292,15 @@ const fallbackPlayHtml = () => `<!doctype html>
             function setText(node, text) {
                 if (node) node.textContent = text;
             }
+            function setLight(name, state, label) {
+                var node = lights[name];
+                if (!node) return;
+                node.className = 'debug-light ' + state;
+                if (label) {
+                    var textNode = node.querySelector('span:last-child');
+                    if (textNode) textNode.textContent = label;
+                }
+            }
             function updateStats(line) {
                 if (line.indexOf('[REQ]') !== -1) counters.req += 1;
                 if (line.indexOf('[AMF]') !== -1) counters.amf += 1;
@@ -242,6 +308,13 @@ const fallbackPlayHtml = () => `<!doctype html>
                 setText(reqStat, String(counters.req));
                 setText(amfStat, String(counters.amf));
                 setText(assetStat, String(counters.assets));
+                if (line.indexOf('Serwer czeka na porcie') !== -1 || line.indexOf('[FALLBACK]') !== -1) setLight('server', 'good', 'Serwer');
+                if (line.indexOf('[REMOTE ASSET]') !== -1 || line.indexOf('[LOOKDATA]') !== -1) setLight('assets', 'good', 'Pliki');
+                if (line.indexOf('[REMOTE ASSET TRY MISS]') !== -1 || line.indexOf('[REMOTE ASSET MISS]') !== -1 || line.indexOf('[MISS]') !== -1) setLight('assets', 'warn', 'Pliki');
+                if (line.indexOf('[TRANSLATION]') !== -1 || line.indexOf('pl_pl_resourcemodule') !== -1) setLight('locale', 'good', 'PL');
+                if (line.indexOf('[TRANSLATION MISS]') !== -1 || line.indexOf('MISSING_LOCALE') !== -1) setLight('locale', 'bad', 'PL');
+                if (line.indexOf('[AMF RESPONSE]') !== -1) setLight('amf', 'good', 'AMF');
+                if (line.indexOf('[AMF ERROR]') !== -1 || line.indexOf('[AMF DECODE MISS]') !== -1) setLight('amf', 'warn', 'AMF');
             }
             function write(level, args) {
                 if (!debug || !output) return;
@@ -299,9 +372,11 @@ const fallbackPlayHtml = () => `<!doctype html>
                         .then(function (response) { return response.json(); })
                         .then(function (data) {
                             setText(dbStat, data.mongoConnected ? 'MongoDB' : data.source);
+                            setLight('db', data.mongoConnected ? 'good' : 'warn', data.mongoConnected ? 'Baza' : 'JSON');
                         })
                         .catch(function () {
                             setText(dbStat, 'offline');
+                            setLight('db', 'bad', 'Baza');
                         });
                 };
                 var pollServerLogs = function () {
