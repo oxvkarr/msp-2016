@@ -87,9 +87,9 @@ const fallbackPlayHtml = () => `<!doctype html>
             right: 14px;
             bottom: 14px;
             z-index: 999999;
-            width: 440px;
+            width: 520px;
             max-width: calc(100vw - 28px);
-            height: 260px;
+            height: 360px;
             display: none;
             overflow: hidden;
             border: 1px solid rgba(255,255,255,.18);
@@ -108,6 +108,11 @@ const fallbackPlayHtml = () => `<!doctype html>
             background: rgba(255,255,255,.08);
             font: 600 12px Arial, sans-serif;
         }
+        #debug-console .debug-actions {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
         #debug-console button {
             height: 24px;
             border: 0;
@@ -117,8 +122,52 @@ const fallbackPlayHtml = () => `<!doctype html>
             cursor: pointer;
             font: 600 11px Arial, sans-serif;
         }
+        #debug-console button.secondary {
+            background: rgba(255,255,255,.13);
+        }
+        #debug-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+        }
+        .debug-stat {
+            min-width: 0;
+            padding: 6px 7px;
+            border-radius: 6px;
+            background: rgba(255,255,255,.08);
+            font: 11px Arial, sans-serif;
+        }
+        .debug-stat strong {
+            display: block;
+            margin-top: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: #fff;
+            font-size: 13px;
+        }
+        #debug-filter-row {
+            display: flex;
+            gap: 6px;
+            padding: 0 10px 8px;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+        }
+        #debug-filter {
+            flex: 1;
+            min-width: 0;
+            height: 26px;
+            box-sizing: border-box;
+            border: 1px solid rgba(255,255,255,.16);
+            border-radius: 5px;
+            background: rgba(0,0,0,.28);
+            color: #e8eefc;
+            padding: 0 8px;
+            font: 12px Consolas, monospace;
+        }
         #debug-log {
-            height: 226px;
+            height: 232px;
             margin: 0;
             padding: 10px;
             overflow: auto;
@@ -138,9 +187,23 @@ const fallbackPlayHtml = () => `<!doctype html>
     </object>
     <div id="debug-console">
         <header>
-            <span>MSP Debug Console</span>
-            <button id="debug-clear" type="button">Clear</button>
+            <span>MSP Dev Panel</span>
+            <div class="debug-actions">
+                <button id="debug-pause" class="secondary" type="button">Pause</button>
+                <button id="debug-copy" class="secondary" type="button">Copy</button>
+                <button id="debug-clear" type="button">Clear</button>
+            </div>
         </header>
+        <section id="debug-stats">
+            <div class="debug-stat">DB<strong id="debug-db">...</strong></div>
+            <div class="debug-stat">REQ<strong id="debug-req">0</strong></div>
+            <div class="debug-stat">AMF<strong id="debug-amf">0</strong></div>
+            <div class="debug-stat">Assety<strong id="debug-assets">0</strong></div>
+        </section>
+        <div id="debug-filter-row">
+            <input id="debug-filter" placeholder="Filtr logów, np. Gateway albo MISS">
+            <button id="debug-scroll" class="secondary" type="button">Bottom</button>
+        </div>
         <pre id="debug-log"></pre>
     </div>
     <script>
@@ -149,14 +212,48 @@ const fallbackPlayHtml = () => `<!doctype html>
             var panel = document.getElementById('debug-console');
             var output = document.getElementById('debug-log');
             var clear = document.getElementById('debug-clear');
+            var pause = document.getElementById('debug-pause');
+            var copy = document.getElementById('debug-copy');
+            var scroll = document.getElementById('debug-scroll');
+            var filter = document.getElementById('debug-filter');
+            var dbStat = document.getElementById('debug-db');
+            var reqStat = document.getElementById('debug-req');
+            var amfStat = document.getElementById('debug-amf');
+            var assetStat = document.getElementById('debug-assets');
+            var allLines = [];
+            var counters = { req: 0, amf: 0, assets: 0 };
+            var paused = false;
+            function renderLog() {
+                if (!output) return;
+                var query = filter && filter.value ? filter.value.toLowerCase() : '';
+                var visible = query ? allLines.filter(function (line) {
+                    return line.toLowerCase().indexOf(query) !== -1;
+                }) : allLines;
+                output.textContent = visible.slice(-500).join('\\n') + (visible.length ? '\\n' : '');
+                if (!paused) output.scrollTop = output.scrollHeight;
+            }
+            function setText(node, text) {
+                if (node) node.textContent = text;
+            }
+            function updateStats(line) {
+                if (line.indexOf('[REQ]') !== -1) counters.req += 1;
+                if (line.indexOf('[AMF]') !== -1) counters.amf += 1;
+                if (line.indexOf('[REMOTE ASSET]') !== -1 || line.indexOf('[LOOKDATA]') !== -1 || line.indexOf('[TRANSLATION]') !== -1) counters.assets += 1;
+                setText(reqStat, String(counters.req));
+                setText(amfStat, String(counters.amf));
+                setText(assetStat, String(counters.assets));
+            }
             function write(level, args) {
                 if (!debug || !output) return;
                 var text = Array.prototype.slice.call(args).map(function (item) {
                     if (typeof item === 'string') return item;
                     try { return JSON.stringify(item); } catch (e) { return String(item); }
                 }).join(' ');
-                output.textContent += '[' + level + '] ' + text + '\\n';
-                output.scrollTop = output.scrollHeight;
+                var line = '[' + level + '] ' + text;
+                allLines.push(line);
+                if (allLines.length > 1200) allLines.shift();
+                updateStats(line);
+                if (!paused) renderLog();
             }
             if (debug && panel) panel.style.display = 'block';
             ['log', 'warn', 'error'].forEach(function (level) {
@@ -169,10 +266,44 @@ const fallbackPlayHtml = () => `<!doctype html>
             window.onerror = function (message, source, line) {
                 write('ERROR', [message + ' @ ' + source + ':' + line]);
             };
-            if (clear) clear.onclick = function () { output.textContent = ''; };
+            if (clear) clear.onclick = function () {
+                allLines = [];
+                counters = { req: 0, amf: 0, assets: 0 };
+                renderLog();
+                setText(reqStat, '0');
+                setText(amfStat, '0');
+                setText(assetStat, '0');
+            };
+            if (pause) pause.onclick = function () {
+                paused = !paused;
+                pause.textContent = paused ? 'Resume' : 'Pause';
+                if (!paused) renderLog();
+            };
+            if (copy) copy.onclick = function () {
+                var text = allLines.join('\\n');
+                if (navigator.clipboard) navigator.clipboard.writeText(text);
+                copy.textContent = 'Copied';
+                setTimeout(function () { copy.textContent = 'Copy'; }, 900);
+            };
+            if (scroll) scroll.onclick = function () {
+                paused = false;
+                if (pause) pause.textContent = 'Pause';
+                renderLog();
+            };
+            if (filter) filter.oninput = renderLog;
             console.log('Fallback play.html loaded');
             if (debug) {
                 var serverLogCursor = 0;
+                var pollDbStatus = function () {
+                    fetch('/api/db/status')
+                        .then(function (response) { return response.json(); })
+                        .then(function (data) {
+                            setText(dbStat, data.mongoConnected ? 'MongoDB' : data.source);
+                        })
+                        .catch(function () {
+                            setText(dbStat, 'offline');
+                        });
+                };
                 var pollServerLogs = function () {
                     fetch('/api/debug/logs?since=' + serverLogCursor)
                         .then(function (response) {
@@ -189,8 +320,10 @@ const fallbackPlayHtml = () => `<!doctype html>
                             write('SERVER', ['debug logs unavailable: ' + error.message]);
                         });
                 };
+                pollDbStatus();
                 pollServerLogs();
                 setInterval(pollServerLogs, 1000);
+                setInterval(pollDbStatus, 5000);
             }
         }());
     </script>
