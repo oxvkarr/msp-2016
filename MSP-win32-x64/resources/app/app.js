@@ -151,6 +151,40 @@ const proxyGatewayRequest = (req, res, method) => {
     return true;
 };
 
+const serveRemoteAsset = async (req, res, cleanPath) => {
+    if (!remoteAssetBaseUrl || !remoteAssetExtensions.has(path.extname(cleanPath).toLowerCase())) {
+        return false;
+    }
+    if (!cleanPath || cleanPath.includes('..')) {
+        return false;
+    }
+
+    const cachedPath = path.join(assetCachePath, cleanPath);
+    if (fs.existsSync(cachedPath) && fs.statSync(cachedPath).isFile()) {
+        res.type(contentTypeFor(cachedPath)).sendFile(cachedPath);
+        return true;
+    }
+
+    const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+    const candidates = [
+        `${remoteAssetBaseUrl}/${cleanPath}${query}`,
+        `${remoteAssetBaseUrl}/${cleanPath.toLowerCase()}${query}`
+    ];
+
+    for (const remoteUrl of candidates) {
+        try {
+            await downloadRemoteAsset(remoteUrl, cachedPath);
+            log(`[REMOTE ASSET] ${req.url} -> ${remoteUrl}`);
+            res.type(contentTypeFor(cachedPath)).sendFile(cachedPath);
+            return true;
+        } catch (err) {
+            log(`[REMOTE ASSET TRY MISS] ${remoteUrl} ${err.message}`);
+        }
+    }
+
+    return false;
+};
+
 app.get(['/languagemaps.txt', '/localization/languagemaps.txt'], (req, res) => {
     const filePath = path.join(publicPath, req.path.replace(/^\/+/, ''));
     log(`[LANGMAP] ${req.url} -> ${filePath}`);
@@ -168,8 +202,16 @@ app.get(/^\/(?:null)?lookdata_[0-9_]+$/i, (req, res) => {
     res.type('application/octet-stream').send(lookDataPayload());
 });
 
-app.get(/^\/Main_20161102_160430\.swf$/i, (req, res) => {
-    res.type('application/x-shockwave-flash').sendFile(path.join(publicPath, 'main_20161102_160430.swf'));
+app.get(/^\/Main_20161102_160430\.swf$/i, async (req, res, next) => {
+    const filePath = path.join(publicPath, 'main_20161102_160430.swf');
+    if (fs.existsSync(filePath)) {
+        res.type('application/x-shockwave-flash').sendFile(filePath);
+        return;
+    }
+    if (await serveRemoteAsset(req, res, 'main_20161102_160430.swf')) {
+        return;
+    }
+    next();
 });
 
 app.get(/^\/msp\/[^/]+\/(.+)$/i, (req, res, next) => {
@@ -211,32 +253,11 @@ app.get('/:client(MSPWeb|MSPMobile)/:locale/myResources.txt', (req, res) => {
 app.use(express.static(publicPath));
 
 app.get('*', async (req, res, next) => {
-    if (!remoteAssetBaseUrl || !remoteAssetExtensions.has(path.extname(req.path).toLowerCase())) {
-        next();
+    if (await serveRemoteAsset(req, res, req.path.replace(/^\/+/, ''))) {
         return;
     }
-
-    const cleanPath = req.path.replace(/^\/+/, '');
-    if (!cleanPath || cleanPath.includes('..')) {
-        next();
-        return;
-    }
-
-    const cachedPath = path.join(assetCachePath, cleanPath);
-    if (fs.existsSync(cachedPath) && fs.statSync(cachedPath).isFile()) {
-        res.type(contentTypeFor(cachedPath)).sendFile(cachedPath);
-        return;
-    }
-
-    try {
-        const remoteUrl = `${remoteAssetBaseUrl}/${cleanPath}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`;
-        await downloadRemoteAsset(remoteUrl, cachedPath);
-        log(`[REMOTE ASSET] ${req.url} -> ${remoteUrl}`);
-        res.type(contentTypeFor(cachedPath)).sendFile(cachedPath);
-    } catch (err) {
-        log(`[REMOTE ASSET MISS] ${req.url} ${err.message}`);
-        next();
-    }
+    log(`[REMOTE ASSET MISS] ${req.url}`);
+    next();
 });
 
 const readUtf = (buffer, offset) => {
