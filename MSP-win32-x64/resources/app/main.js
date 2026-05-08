@@ -1,11 +1,15 @@
 const { app, BrowserWindow, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
-require('./app');
 
 const flashPath = path.join(__dirname, 'pepflashplayer.dll');
 const debugLogPath = path.join(__dirname, 'msp-debug.log');
 const LOCAL_BASE_URL = 'http://127.0.0.1';
+const exeName = path.basename(process.execPath || '').toLowerCase();
+const isDebugMode = process.argv.includes('--debug') || process.env.MSP_DEBUG === '1' || exeName.includes('debug');
+
+process.env.MSP_DEBUG = isDebugMode ? '1' : '0';
+require('./app');
 const localHostRules = [
     'MAP 127.0.0.1translations 127.0.0.1',
     'MAP 127.0.0.1localization 127.0.0.1',
@@ -82,7 +86,9 @@ function redirectExternalMspRequests() {
             }
 
             const redirectURL = `${LOCAL_BASE_URL}${url.pathname}${url.search}`;
-            console.log(`[REDIRECT] ${details.url} -> ${redirectURL}`);
+            if (isDebugMode) {
+                console.log(`[REDIRECT] ${details.url} -> ${redirectURL}`);
+            }
             callback({ redirectURL });
         } catch (err) {
             callback({});
@@ -96,7 +102,7 @@ function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
-        title: 'MSP Private Server',
+        title: isDebugMode ? 'MSP Private Server - Debug' : 'MSP',
         webPreferences: {
             plugins: true,
             contextIsolation: false,
@@ -105,22 +111,24 @@ function createWindow() {
         }
     });
 
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
-    mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-        debugLog(`[WINDOW CONSOLE] level=${level} ${sourceId || ''}:${line || 0} ${message}`);
-    });
-    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
-        debugLog(`[WINDOW LOAD FAIL] code=${errorCode} url=${validatedURL} ${errorDescription}`);
-    });
-    mainWindow.webContents.on('plugin-crashed', (event, name, version) => {
-        debugLog(`[PLUGIN CRASHED] ${name || 'unknown'} ${version || ''}`);
-    });
-    mainWindow.webContents.on('crashed', () => {
-        debugLog('[RENDERER CRASHED]');
-    });
-    mainWindow.on('unresponsive', () => {
-        debugLog('[WINDOW UNRESPONSIVE]');
-    });
+    if (isDebugMode) {
+        mainWindow.webContents.openDevTools({ mode: 'detach' });
+        mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+            debugLog(`[WINDOW CONSOLE] level=${level} ${sourceId || ''}:${line || 0} ${message}`);
+        });
+        mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+            debugLog(`[WINDOW LOAD FAIL] code=${errorCode} url=${validatedURL} ${errorDescription}`);
+        });
+        mainWindow.webContents.on('plugin-crashed', (event, name, version) => {
+            debugLog(`[PLUGIN CRASHED] ${name || 'unknown'} ${version || ''}`);
+        });
+        mainWindow.webContents.on('crashed', () => {
+            debugLog('[RENDERER CRASHED]');
+        });
+        mainWindow.on('unresponsive', () => {
+            debugLog('[WINDOW UNRESPONSIVE]');
+        });
+    }
     mainWindow.loadURL('http://127.0.0.1/play.html');
 }
 

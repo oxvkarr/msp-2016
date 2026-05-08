@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "start:debug": "electron . --debug",
+    "make-launchers": "powershell -ExecutionPolicy Bypass -File ./tools/make-launchers.ps1"
   },
   "devDependencies": {
     "electron": "11.5.0"

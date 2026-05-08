@@ -2,6 +2,8 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const http = require('http');
+const https = require('https');
 const { Writable } = require('stream');
 const amfjs = require('amfjs');
 const { MongoClient } = require('mongodb');
@@ -9,18 +11,24 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const app = express();
 
 const publicPath = path.join(__dirname, 'public');
+const assetCachePath = path.join(__dirname, 'asset-cache');
 const dbPath = path.join(__dirname, 'msp-db.json');
 const debugLogPath = path.join(__dirname, 'msp-debug.log');
 const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || '';
 const mongoDbName = process.env.MONGODB_DB || 'msp_2016';
 const mongoStateCollection = process.env.MONGODB_STATE_COLLECTION || 'state';
+const remoteAssetBaseUrl = (process.env.REMOTE_ASSET_BASE_URL || '').replace(/\/+$/, '');
+const remoteGatewayUrl = (process.env.REMOTE_GATEWAY_URL || '').replace(/\/+$/, '');
+const isDebugMode = process.env.MSP_DEBUG === '1';
 let mongoClient = null;
 let mongoDatabase = null;
 let dbSource = 'json';
 const log = (message) => {
     const line = `${new Date().toISOString()} ${message}`;
-    console.log(message);
-    fs.appendFile(debugLogPath, `${line}\n`, () => {});
+    if (isDebugMode) {
+        console.log(message);
+        fs.appendFile(debugLogPath, `${line}\n`, () => {});
+    }
 };
 
 app.use(express.raw({ type: '*/*', limit: '50mb' }));
@@ -53,6 +61,90 @@ const sanitizeLocalMap = (text) => text
     .replace(/https?:\/\/(?:alpha|beta|dev|test|rc|www|info)\.moviestarplanet(?:\.[a-z]+)?(?:\.[a-z]+)?\//gi, 'http://127.0.0.1/')
     .replace(/https?:\/\/(?:[a-z0-9-]+\.)?mspapis\.com\//gi, 'http://127.0.0.1/')
     .replace(/https?:\/\/(?:[a-z0-9-]+\.)?mspcdns\.com\//gi, 'http://127.0.0.1/');
+
+const remoteAssetExtensions = new Set([
+    '.swf', '.png', '.jpg', '.jpeg', '.gif', '.mp3', '.txt', '.xml', '.json', '.css'
+]);
+
+const contentTypeFor = (filePath) => {
+    const ext = path.extname(filePath).toLowerCase();
+    return {
+        '.swf': 'application/x-shockwave-flash',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.mp3': 'audio/mpeg',
+        '.txt': 'text/plain',
+        '.xml': 'text/xml',
+        '.json': 'application/json',
+        '.css': 'text/css'
+    }[ext] || 'application/octet-stream';
+};
+
+const downloadRemoteAsset = (url, destination) => new Promise((resolve, reject) => {
+    const client = url.startsWith('https:') ? https : http;
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    const request = client.get(url, (response) => {
+        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+            response.resume();
+            downloadRemoteAsset(new URL(response.headers.location, url).toString(), destination).then(resolve, reject);
+            return;
+        }
+        if (response.statusCode !== 200) {
+            response.resume();
+            reject(new Error(`HTTP ${response.statusCode}`));
+            return;
+        }
+        const tempFile = `${destination}.download`;
+        const stream = fs.createWriteStream(tempFile);
+        response.pipe(stream);
+        stream.on('finish', () => {
+            stream.close(() => {
+                fs.rename(tempFile, destination, (err) => err ? reject(err) : resolve(destination));
+            });
+        });
+        stream.on('error', reject);
+    });
+    request.on('error', reject);
+    request.setTimeout(15000, () => {
+        request.destroy(new Error('Remote asset timeout'));
+    });
+});
+
+const proxyGatewayRequest = (req, res, method) => {
+    if (!remoteGatewayUrl) return false;
+
+    const targetUrl = new URL(`${remoteGatewayUrl}/Gateway.aspx`);
+    if (method) {
+        targetUrl.searchParams.set('method', method);
+    }
+    const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    const client = targetUrl.protocol === 'https:' ? https : http;
+    const proxyReq = client.request(targetUrl, {
+        method: req.method,
+        headers: {
+            'content-type': req.headers['content-type'] || 'application/x-amf',
+            'content-length': body.length
+        },
+        timeout: 20000
+    }, (proxyRes) => {
+        res.status(proxyRes.statusCode || 502);
+        res.set('Content-Type', proxyRes.headers['content-type'] || 'application/x-amf');
+        proxyRes.pipe(res);
+    });
+
+    proxyReq.on('error', (err) => {
+        log(`[REMOTE GATEWAY FAIL] ${targetUrl.toString()} ${err.message}`);
+        res.status(502).type('text/plain').send('Remote gateway unavailable');
+    });
+    proxyReq.on('timeout', () => {
+        proxyReq.destroy(new Error('Remote gateway timeout'));
+    });
+    proxyReq.end(body);
+    log(`[REMOTE GATEWAY] ${method || ''} -> ${targetUrl.toString()}`);
+    return true;
+};
 
 app.get(['/languagemaps.txt', '/localization/languagemaps.txt'], (req, res) => {
     const filePath = path.join(publicPath, req.path.replace(/^\/+/, ''));
@@ -112,6 +204,35 @@ app.get('/:client(MSPWeb|MSPMobile)/:locale/myResources.txt', (req, res) => {
 });
 
 app.use(express.static(publicPath));
+
+app.get('*', async (req, res, next) => {
+    if (!remoteAssetBaseUrl || !remoteAssetExtensions.has(path.extname(req.path).toLowerCase())) {
+        next();
+        return;
+    }
+
+    const cleanPath = req.path.replace(/^\/+/, '');
+    if (!cleanPath || cleanPath.includes('..')) {
+        next();
+        return;
+    }
+
+    const cachedPath = path.join(assetCachePath, cleanPath);
+    if (fs.existsSync(cachedPath) && fs.statSync(cachedPath).isFile()) {
+        res.type(contentTypeFor(cachedPath)).sendFile(cachedPath);
+        return;
+    }
+
+    try {
+        const remoteUrl = `${remoteAssetBaseUrl}/${cleanPath}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`;
+        await downloadRemoteAsset(remoteUrl, cachedPath);
+        log(`[REMOTE ASSET] ${req.url} -> ${remoteUrl}`);
+        res.type(contentTypeFor(cachedPath)).sendFile(cachedPath);
+    } catch (err) {
+        log(`[REMOTE ASSET MISS] ${req.url} ${err.message}`);
+        next();
+    }
+});
 
 const readUtf = (buffer, offset) => {
     const length = buffer.readUInt16BE(offset);
@@ -526,21 +647,38 @@ const DEV_ACTOR_ID = 1;
 const DEV_USERNAME = 'admin';
 const DEV_PASSWORD = 'admin';
 
-const devActorDetails = () => typed('com.moviestarplanet.usersession.valueobjects.ActorDetails', {
-    ActorId: DEV_ACTOR_ID,
-    Name: DEV_USERNAME,
-    Level: 101,
-    SkinSWF: 'swf/skins/maleskin.swf',
-    _SkinSWF: 'swf/skins/maleskin.swf',
-    SkinColor: '0xffd1b3',
-    NoseId: 1,
-    EyeId: 2,
-    MouthId: 1,
-    Money: 999999999,
+const actorDefaults = (actor = {}) => ({
+    actorId: actor.actorId || actor.ActorId || DEV_ACTOR_ID,
+    name: actor.name || actor.Name || DEV_USERNAME,
+    level: actor.level || actor.Level || 101,
+    money: actor.money || actor.Money || 999999999,
+    diamonds: actor.diamonds || actor.Diamonds || 999999999,
+    fame: actor.fame || actor.Fame || 999999999,
+    fortune: actor.fortune || actor.Fortune || 999999999,
+    skinSWF: actor.skinSWF || actor.SkinSWF || 'swf/skins/maleskin.swf',
+    skinColor: actor.skinColor || actor.SkinColor || '0xffd1b3',
+    eyeId: actor.eyeId || actor.EyeId || 2,
+    noseId: actor.noseId || actor.NoseId || 1,
+    mouthId: actor.mouthId || actor.MouthId || 1
+});
+
+const devActorDetails = (actorRecord = null) => {
+    const actor = actorDefaults(actorRecord);
+    return typed('com.moviestarplanet.usersession.valueobjects.ActorDetails', {
+    ActorId: actor.actorId,
+    Name: actor.name,
+    Level: actor.level,
+    SkinSWF: actor.skinSWF,
+    _SkinSWF: actor.skinSWF,
+    SkinColor: actor.skinColor,
+    NoseId: actor.noseId,
+    EyeId: actor.eyeId,
+    MouthId: actor.mouthId,
+    Money: actor.money,
     EyeColors: '0x5b351c',
     MouthColors: '0xd45a6a',
-    Fame: 999999999,
-    Fortune: 999999999,
+    Fame: actor.fame,
+    Fortune: actor.fortune,
     FriendCount: 0,
     ProfileText: 'Local admin/dev account',
     Moderator: 0,
@@ -598,7 +736,7 @@ const devActorDetails = () => typed('com.moviestarplanet.usersession.valueobject
         InitialAnimation: 'stand'
     }],
     ActorPersonalInfo: typed('com.moviestarplanet.usersession.valueobjects.ActorPersonalInfo', {
-        ActorId: DEV_ACTOR_ID,
+        ActorId: actor.actorId,
         ParentEmail: '',
         ChatAllowed: 1,
         ActorEmailAllowed: 1,
@@ -612,6 +750,7 @@ const devActorDetails = () => typed('com.moviestarplanet.usersession.valueobject
     }),
     ActorRelationships: []
 });
+};
 
 const makePostLoginSequence = (className) => typed(className, {
     ShowCampaign: false,
@@ -636,21 +775,23 @@ const loginActorPersonalInfo = () => typed('MovieStarPlanet.DBML.ActorPersonalIn
     YoutubeAllowed: true
 });
 
-const loginActorDetails = () => typed('MovieStarPlanet.DBML.ActorDetails', {
-    ActorId: DEV_ACTOR_ID,
-    Name: DEV_USERNAME,
-    Level: 101,
-    SkinSWF: 'swf/skins/maleskin.swf',
-    _SkinSWF: 'swf/skins/maleskin.swf',
-    SkinColor: '0xffd1b3',
-    NoseId: 1,
-    EyeId: 2,
-    MouthId: 1,
-    Money: 999999999,
+const loginActorDetails = (actorRecord = null) => {
+    const actor = actorDefaults(actorRecord);
+    return typed('MovieStarPlanet.DBML.ActorDetails', {
+    ActorId: actor.actorId,
+    Name: actor.name,
+    Level: actor.level,
+    SkinSWF: actor.skinSWF,
+    _SkinSWF: actor.skinSWF,
+    SkinColor: actor.skinColor,
+    NoseId: actor.noseId,
+    EyeId: actor.eyeId,
+    MouthId: actor.mouthId,
+    Money: actor.money,
     EyeColors: '0x5b351c',
     MouthColors: '0xd45a6a',
-    Fame: 999999999,
-    Fortune: 999999999,
+    Fame: actor.fame,
+    Fortune: actor.fortune,
     FriendCount: 0,
     ProfileText: 'Local admin/dev account',
     Created: new Date(),
@@ -708,10 +849,11 @@ const loginActorDetails = () => typed('MovieStarPlanet.DBML.ActorDetails', {
     ActorPersonalInfo: null,
     ActorRelationships: null
 });
+};
 
-const makeLoginStatus = (className, postLoginSeq = postLoginSequence()) => typed(className, {
+const makeLoginStatus = (className, postLoginSeq = postLoginSequence(), actorRecord = null) => typed(className, {
     status: 'Success',
-    actor: loginActorDetails(),
+    actor: loginActorDetails(actorRecord),
     statusDetails: '',
     actorLocale: [],
     lbs: [],
@@ -729,11 +871,11 @@ const makeLoginStatus = (className, postLoginSeq = postLoginSequence()) => typed
     amsHash: ''
 });
 
-const loginStatus = () => makeLoginStatus('com.moviestarplanet.valueObjects.LoginStatus');
-const serviceLoginStatus = () => makeLoginStatus('com.moviestarplanet.services.userservice.valueObjects.LoginStatus', null);
+const loginStatus = (actorRecord = null) => makeLoginStatus('com.moviestarplanet.valueObjects.LoginStatus', postLoginSequence(), actorRecord);
+const serviceLoginStatus = (actorRecord = null) => makeLoginStatus('com.moviestarplanet.services.userservice.valueObjects.LoginStatus', null, actorRecord);
 
-const webLoginStatus = () => {
-    return loginStatus2();
+const webLoginStatus = (actorRecord = null) => {
+    return loginStatus2(actorRecord);
 };
 
 const loginHash = (status) => {
@@ -750,8 +892,8 @@ const loginHash = (status) => {
     return crypto.createHash('md5').update(`idu!2*;d${values.join('')}`, 'utf8').digest('hex');
 };
 
-const loginStatus2 = () => {
-    const status = serviceLoginStatus();
+const loginStatus2 = (actorRecord = null) => {
+    const status = serviceLoginStatus(actorRecord);
     const hash = loginHash(status);
     const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
     delete status.__class;
@@ -762,29 +904,45 @@ const loginStatus2 = () => {
     };
 };
 
-const createNewUserStatus = () => typed('com.moviestarplanet.services.userservice.valueObjects.CreateNewUserStatus', {
+const invalidLoginStatus2 = () => {
+    const status = serviceLoginStatus();
+    status.status = 'InvalidCredentials';
+    status.statusDetails = '';
+    const hash = loginHash(status);
+    const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
+    delete status.__class;
+    return {
+        loginStatus: status,
+        hDetails,
+        hash
+    };
+};
+
+const createNewUserStatus = (actorRecord = null) => {
+    const actor = actorDefaults(actorRecord);
+    return typed('com.moviestarplanet.services.userservice.valueObjects.CreateNewUserStatus', {
     status: 'Created',
     Status: 'Created',
     success: true,
     Success: true,
-    actorId: DEV_ACTOR_ID,
-    ActorId: DEV_ACTOR_ID,
-    actorName: DEV_USERNAME,
-    ActorName: DEV_USERNAME,
-    actorDetails: devActorDetails(),
-    ActorDetails: devActorDetails(),
-    loginStatus: serviceLoginStatus(),
-    LoginStatus: serviceLoginStatus(),
-    loginStatus2: loginStatus2(),
-    LoginStatus2: loginStatus2(),
+    actorId: actor.actorId,
+    ActorId: actor.actorId,
+    actorName: actor.name,
+    ActorName: actor.name,
+    actorDetails: devActorDetails(actorRecord),
+    ActorDetails: devActorDetails(actorRecord),
+    loginStatus: serviceLoginStatus(actorRecord),
+    LoginStatus: serviceLoginStatus(actorRecord),
+    loginStatus2: loginStatus2(actorRecord),
+    LoginStatus2: loginStatus2(actorRecord),
     newActorCreationData: typed('MovieStarPlanet.WebService.User.ValueObjects.NewActorCreationData', {
-        ActorId: DEV_ACTOR_ID,
-        Name: DEV_USERNAME,
-        SkinSWF: 'swf/skins/maleskin.swf',
-        SkinColor: '0xffd1b3',
-        EyeId: 2,
-        NoseId: 1,
-        MouthId: 1,
+        ActorId: actor.actorId,
+        Name: actor.name,
+        SkinSWF: actor.skinSWF,
+        SkinColor: actor.skinColor,
+        EyeId: actor.eyeId,
+        NoseId: actor.noseId,
+        MouthId: actor.mouthId,
         Clothes: starterClothes().slice(0, 6),
         ActorClothesRels: starterClothes().slice(0, 6)
     }),
@@ -793,6 +951,75 @@ const createNewUserStatus = () => typed('com.moviestarplanet.services.userservic
     message: '',
     Message: ''
 });
+};
+
+const createNewUserError = (message, errorCode = 1) => typed('com.moviestarplanet.services.userservice.valueObjects.CreateNewUserStatus', {
+    status: 'Error',
+    Status: 'Error',
+    success: false,
+    Success: false,
+    errorCode,
+    ErrorCode: errorCode,
+    message,
+    Message: message
+});
+
+const createAccountFromArgs = async (args = []) => {
+    const { username, password } = credentialsFromArgs(args);
+    const cleanUsername = String(username || '').trim();
+
+    if (!/^[a-zA-Z0-9_.-]{3,20}$/.test(cleanUsername)) {
+        return createNewUserError('Invalid username', 2);
+    }
+    if (findUserByName(cleanUsername)) {
+        return createNewUserError('Username already exists', 3);
+    }
+
+    const actorId = nextActorId();
+    const actor = {
+        actorId,
+        name: cleanUsername,
+        level: 1,
+        money: 5000,
+        diamonds: 100,
+        fame: 0,
+        fortune: 0,
+        skinSWF: 'swf/skins/maleskin.swf',
+        skinColor: '0xffd1b3',
+        eyeId: 2,
+        noseId: 1,
+        mouthId: 1,
+        createdAt: new Date().toISOString()
+    };
+    const user = {
+        id: actorId,
+        username: cleanUsername,
+        passwordHash: hashPassword(password),
+        actorId,
+        role: 'player',
+        createdAt: actor.createdAt
+    };
+
+    db.users.push(user);
+    db.actors.push(actor);
+    db.inventory[String(actorId)] = starterClothes().slice(0, 6);
+    await saveDb();
+    log(`[ACCOUNT] created username=${cleanUsername} actorId=${actorId} source=${dbSource}`);
+    return createNewUserStatus(actor);
+};
+
+const actorForLoginArgs = (args = []) => {
+    const { username, password } = credentialsFromArgs(args);
+    const user = findUserByName(username);
+
+    if (user && passwordMatches(user, password)) {
+        return findActorById(user.actorId) || null;
+    }
+    if (String(username || '').toLowerCase() === DEV_USERNAME && password === DEV_PASSWORD) {
+        return findActorById(DEV_ACTOR_ID) || db.actors[0] || null;
+    }
+    return null;
+};
 
 const relativePublicPath = (filePath) => path.relative(publicPath, filePath).replace(/\\/g, '/');
 
@@ -959,12 +1186,77 @@ const loadDb = async () => {
 
 let db = defaultDb();
 
+const saveDb = async () => {
+    db = ensureDbShape(db);
+    if (mongoClient && mongoDatabase) {
+        await mongoDatabase.collection(mongoStateCollection).updateOne(
+            { _id: 'main' },
+            { $set: db },
+            { upsert: true }
+        );
+        return;
+    }
+    fs.writeFileSync(dbPath, JSON.stringify(db, null, 2));
+};
+
 const isDevCredentials = (requestBody) => {
     const text = Buffer.isBuffer(requestBody) ? requestBody.toString('utf8').toLowerCase() : '';
     return text.includes(DEV_USERNAME) || text.includes(DEV_PASSWORD);
 };
 
 const methodLeaf = (method) => String(method || '').split('.').pop();
+
+const hashPassword = (password) => crypto.createHash('sha256').update(String(password || ''), 'utf8').digest('hex');
+
+const collectStrings = (value, output = []) => {
+    if (typeof value === 'string') {
+        output.push(value);
+    } else if (Array.isArray(value)) {
+        value.forEach((item) => collectStrings(item, output));
+    } else if (value && typeof value === 'object') {
+        Object.keys(value).forEach((key) => {
+            if (key !== '__class' && key !== 'Ticket') {
+                collectStrings(value[key], output);
+            }
+        });
+    }
+    return output;
+};
+
+const usefulCredentialStrings = (args = []) => collectStrings(args)
+    .map((value) => String(value || '').trim())
+    .filter((value) => value.length >= 3 && value.length <= 32)
+    .filter((value) => !/^0x[0-9a-f]+$/i.test(value))
+    .filter((value) => !/^(http|swf\/|img\/|lookdata_|mockhash_|en_|pl_|de_|fr_|nl_)/i.test(value))
+    .filter((value) => !/[\\/:]/.test(value));
+
+const credentialsFromArgs = (args = []) => {
+    if (typeof args[0] === 'string' && typeof args[1] === 'string') {
+        return { username: args[0].trim(), password: args[1] };
+    }
+    const strings = usefulCredentialStrings(args);
+    return {
+        username: strings[0] || `player${Date.now()}`,
+        password: strings[1] || crypto.randomBytes(8).toString('hex')
+    };
+};
+
+const findUserByName = (username) => {
+    const wanted = String(username || '').toLowerCase();
+    return (db.users || []).find((user) => String(user.username || '').toLowerCase() === wanted) || null;
+};
+
+const findActorById = (actorId) => {
+    return (db.actors || []).find((actor) => Number(actor.actorId) === Number(actorId)) || null;
+};
+
+const passwordMatches = (user, password) => {
+    if (!user) return false;
+    if (user.passwordHash) return user.passwordHash === hashPassword(password);
+    return user.password === password;
+};
+
+const nextActorId = () => Math.max(DEV_ACTOR_ID, ...(db.actors || []).map((actor) => Number(actor.actorId) || 0)) + 1;
 
 const okResult = (data = null) => ({
     Success: true,
@@ -1136,7 +1428,7 @@ const shouldUseAmf3 = (method, result) => {
     return /Login|LoadDataForRegisterNewUser|LoadActorDetails|UserSession|UserService|MovieStar|Shopping|Shop|Spending|Profile|Friend|Movie|Look|News|Quest|Gift|Admin|Payment|Messaging|Room|Inventory|Wardrobe|Logging/i.test(method);
 };
 
-const getAmfResultForMethod = (method) => {
+const getAmfResultForMethod = async (method, args = []) => {
     const leaf = methodLeaf(method);
     if (method.endsWith('GetAppSettings')) {
         return {
@@ -1169,13 +1461,15 @@ const getAmfResultForMethod = (method) => {
         return looksList()[0];
     }
     if (method.endsWith('Login2')) {
-        return loginStatus2();
+        const actor = actorForLoginArgs(args);
+        return actor ? loginStatus2(actor) : invalidLoginStatus2();
     }
     if (method.endsWith('Login')) {
-        return webLoginStatus();
+        const actor = actorForLoginArgs(args);
+        return actor ? webLoginStatus(actor) : invalidLoginStatus2();
     }
     if (method.endsWith('CreateNewUser') || method.endsWith('CreateNewUserOld')) {
-        return createNewUserStatus();
+        return createAccountFromArgs(args);
     }
     if (method.endsWith('LoadActorDetails') || method.endsWith('LoadActorDetails2') || method.endsWith('LoadActorDetailsExtended')) {
         return devActorDetails();
@@ -1222,16 +1516,21 @@ const getAmfResultForMethod = (method) => {
     return null;
 };
 
-app.all('/Gateway.aspx', (req, res) => {
+app.all('/Gateway.aspx', async (req, res) => {
     const size = Buffer.isBuffer(req.body) ? req.body.length : 0;
     const method = req.query.method || '';
+    if (proxyGatewayRequest(req, res, method)) {
+        return;
+    }
     const envelope = parseAmfEnvelope(req.body);
     const responseUri = envelope && envelope.messages[0] ? envelope.messages[0].response : '/1';
+    let decodedArgs = [];
     log(`[AMF] ${req.method} /Gateway.aspx method=${method} body=${size} bytes response=${responseUri}`);
     if (envelope && envelope.messages[0]) {
         try {
             log(`[AMF BODY] target=${envelope.messages[0].target} length=${envelope.messages[0].body.length} hex=${envelope.messages[0].body.slice(0, 32).toString('hex')}`);
             const decodedBody = decodeAmfjsBody(envelope.messages[0].body);
+            decodedArgs = Array.isArray(decodedBody) ? decodedBody : [];
             log(`[AMF DECODE] target=${envelope.messages[0].target} args=${previewValue(decodedBody)}`);
         } catch (err) {
             log(`[AMF DECODE MISS] target=${envelope.messages[0].target} error=${err.message}`);
@@ -1240,7 +1539,7 @@ app.all('/Gateway.aspx', (req, res) => {
     if ((method.endsWith('Login') || method.endsWith('Login2')) && !isDevCredentials(req.body)) {
         log(`[DEV LOGIN] accepting local dev login as ${DEV_USERNAME}/${DEV_PASSWORD}`);
     }
-    const result = getAmfResultForMethod(method);
+    const result = await getAmfResultForMethod(method, decodedArgs);
     res.type('application/x-amf').send(buildAmfResponse(envelope ? envelope.version : 0, responseUri, result, {
         amf3: shouldUseAmf3(method, result),
         debugLabel: method

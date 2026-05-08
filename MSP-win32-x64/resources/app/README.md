@@ -15,6 +15,19 @@ npm start
 
 If no MongoDB config is provided, the app starts with the local `msp-db.json` fallback so anyone cloning the repo can run it immediately.
 
+## Launchers
+
+The Windows package has two launchers:
+
+- `MSP.exe` starts the player version without DevTools and noisy request logs.
+- `MSP-Debug.exe` starts the developer version with DevTools and debug logging enabled.
+
+When `MSP.exe` changes, run this command to refresh the debug launcher:
+
+```powershell
+npm run make-launchers
+```
+
 ## MongoDB database
 The local server can use MongoDB instead of `msp-db.json`.
 
@@ -30,6 +43,16 @@ MONGODB_STATE_COLLECTION=state
 
 The `.env` file is ignored by git, so passwords and private connection strings are not published in the repository.
 
+Do not put your private MongoDB Atlas password in GitHub. If you want everyone to write accounts into one shared online database, host this backend on a server and point clients to that backend. A public client should never contain the Atlas connection string.
+
+For public players, use a remote gateway instead of MongoDB credentials in the client:
+
+```env
+REMOTE_GATEWAY_URL=https://your-server.example
+```
+
+With this set, the local client still serves Flash/assets, but all `Gateway.aspx` AMF calls are proxied to your hosted backend. That hosted backend is the only place that should have `MONGODB_URI`.
+
 PowerShell example for local MongoDB without `.env`:
 
 ```powershell
@@ -39,6 +62,18 @@ npm start
 ```
 
 Open `http://127.0.0.1/api/db/status` to check if the server is using `mongodb` or the JSON fallback.
+
+## Remote assets
+
+The client first serves files from `public`. If a file is missing and `REMOTE_ASSET_BASE_URL` is set, the server downloads that asset into `asset-cache` and serves it locally.
+
+Example:
+
+```env
+REMOTE_ASSET_BASE_URL=https://your-domain.example/msp-assets
+```
+
+This lets release builds stay smaller: keep only the boot files locally, host the larger `swf`, `img`, `sounds`, and dictionary assets on your asset server, and let the client cache them when needed.
 
 ## Build for Windows
 `npm run build-windows`
