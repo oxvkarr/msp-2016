@@ -673,7 +673,9 @@ const DEV_ACTOR_ID = 1;
 const DEV_USERNAME = 'admin';
 const DEV_PASSWORD = 'admin';
 
-const actorDefaults = (actor = {}) => ({
+const actorDefaults = (actorRecord = {}) => {
+    const actor = actorRecord || {};
+    return {
     actorId: actor.actorId || actor.ActorId || DEV_ACTOR_ID,
     name: actor.name || actor.Name || DEV_USERNAME,
     level: actor.level || actor.Level || 101,
@@ -686,7 +688,8 @@ const actorDefaults = (actor = {}) => ({
     eyeId: actor.eyeId || actor.EyeId || 2,
     noseId: actor.noseId || actor.NoseId || 1,
     mouthId: actor.mouthId || actor.MouthId || 1
-});
+};
+};
 
 const devActorDetails = (actorRecord = null) => {
     const actor = actorDefaults(actorRecord);
@@ -1565,11 +1568,20 @@ app.all('/Gateway.aspx', async (req, res) => {
     if ((method.endsWith('Login') || method.endsWith('Login2')) && !isDevCredentials(req.body)) {
         log(`[DEV LOGIN] accepting local dev login as ${DEV_USERNAME}/${DEV_PASSWORD}`);
     }
-    const result = await getAmfResultForMethod(method, decodedArgs);
-    res.type('application/x-amf').send(buildAmfResponse(envelope ? envelope.version : 0, responseUri, result, {
-        amf3: shouldUseAmf3(method, result),
-        debugLabel: method
-    }));
+    try {
+        const result = await getAmfResultForMethod(method, decodedArgs);
+        res.type('application/x-amf').send(buildAmfResponse(envelope ? envelope.version : 0, responseUri, result, {
+            amf3: shouldUseAmf3(method, result),
+            debugLabel: method
+        }));
+    } catch (err) {
+        log(`[AMF ERROR] ${method} ${err.stack || err.message}`);
+        const result = okResult();
+        res.type('application/x-amf').send(buildAmfResponse(envelope ? envelope.version : 0, responseUri, result, {
+            amf3: true,
+            debugLabel: `${method} ERROR_FALLBACK`
+        }));
+    }
 });
 
 app.get('/getConfig', (req, res) => {
