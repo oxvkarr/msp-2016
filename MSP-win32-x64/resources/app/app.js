@@ -1274,14 +1274,71 @@ const withCollectionAliases = (data) => {
 };
 
 const starterClothes = () => [
+    cloth(9001, 'swf/world/shopicons/hair.swf', 'hair.swf', 2, 'Female', '0x6b3b18,0x8a5522'),
+    cloth(9002, 'swf/world/shopicons/hair_male.swf', 'hair_male.swf', 2, 'Male', '0x6b3b18,0x8a5522'),
     cloth(1001, 'swf/stuff/nickelodeon_spotlight_girlstop_fj.swf', 'nickelodeon_spotlight_girlstop_fj.swf', 3, 'Female', '0xff66aa,0xffffff'),
     cloth(1002, 'swf/stuff/nickelodeon_spotlight_boystop_fj.swf', 'nickelodeon_spotlight_boystop_fj.swf', 3, 'Male', '0x3366cc,0xffffff'),
     cloth(1003, 'swf/stuff/birthdaycampaign_2013_boystop_ms_mf.swf', 'birthdaycampaign_2013_boystop_ms_mf.swf', 3, 'Male', '0x1e63aa,0xffffff'),
-    cloth(1004, 'swf/stuff/nickelodeon_2015_maletopred_mf.swf', 'nickelodeon_2015_maletopred_mf.swf', 4, 'Male', '0xcc3333,0xffffff'),
-    ...catalogClothes(30)
+    cloth(1004, 'swf/stuff/cindarella whipped cream overwhelming disney dress.swf', 'cindarella whipped cream overwhelming disney dress.swf', 3, 'Female', '0xffffff,0xbfe8ff'),
+    cloth(1005, 'swf/stuff/nickelodeon_2015_maletopred_mf.swf', 'nickelodeon_2015_maletopred_mf.swf', 4, 'Male', '0xcc3333,0xffffff'),
+    cloth(9003, 'swf/world/shopicons/bottoms.swf', 'bottoms.swf', 4, 'Female', '0x2454a6,0xffffff'),
+    cloth(9004, 'swf/world/shopicons/bottoms_male.swf', 'bottoms_male.swf', 4, 'Male', '0x2454a6,0xffffff'),
+    cloth(9005, 'swf/world/shopicons/shoes.swf', 'shoes.swf', 5, 'Female', '0x222222,0xffffff'),
+    cloth(9006, 'swf/world/shopicons/shoes_male.swf', 'shoes_male.swf', 5, 'Male', '0x222222,0xffffff')
 ];
 
-const registerNewUserData = () => withCollectionAliases(typed('com.moviestarplanet.moviestar.valueObjects.RegisterNewUserData', {
+const clothItem = (rel) => rel && (rel.Cloth || rel._Cloth || rel);
+
+const clothItems = (rels) => rels.map(clothItem).filter(Boolean);
+
+const relSlot = (rel) => {
+    const item = clothItem(rel);
+    const category = item && (item.ClothesCategory || item._ClothesCategory);
+    return Number(category && (category.SlotTypeId || category._SlotTypeId || category.ClothesCategoryId || category._ClothesCategoryId));
+};
+
+const relsBySlot = (rels, slot) => rels.filter((rel) => relSlot(rel) === slot);
+
+const defaultRegisterActor = (gender, rels) => {
+    const isFemale = gender === 'Female';
+    const actorRels = rels.filter((rel) => {
+        const item = clothItem(rel);
+        return !item || !item.Gender || item.Gender === gender;
+    }).slice(0, 5);
+    const skinSWF = isFemale ? 'swf/skins/femaleskin.swf' : 'swf/skins/maleskin.swf';
+    const eyeId = isFemale ? 1 : 2;
+    return typed('com.moviestarplanet.usersession.valueobjects.ActorDetails', {
+        ActorId: 0,
+        Name: '',
+        Gender: gender,
+        SkinSWF: skinSWF,
+        _SkinSWF: skinSWF,
+        SkinColor: '0xffd1b3',
+        _SkinColor: '0xffd1b3',
+        EyeId: eyeId,
+        _EyeId: eyeId,
+        NoseId: 1,
+        _NoseId: 1,
+        MouthId: 1,
+        _MouthId: 1,
+        EyeColors: isFemale ? '0x5b351c' : '0x3a6eb5',
+        MouthColors: '0xd45a6a',
+        ActorClothesRels: actorRels,
+        _ActorClothesRels: actorRels,
+        Clothes: clothItems(actorRels),
+        _Clothes: clothItems(actorRels)
+    });
+};
+
+const registerNewUserData = () => {
+    const rels = starterClothes();
+    const hairRels = relsBySlot(rels, 2);
+    const topRels = relsBySlot(rels, 3);
+    const bottomRels = relsBySlot(rels, 4);
+    const shoeRels = relsBySlot(rels, 5);
+    const femaleActor = defaultRegisterActor('Female', rels);
+    const maleActor = defaultRegisterActor('Male', rels);
+    return withCollectionAliases(typed('com.moviestarplanet.moviestar.valueObjects.RegisterNewUserData', {
     eyes: [
         facePart('com.moviestarplanet.moviestar.valueObjects.Eye', 'EyeId', 1, 'swf/dragonbone_faceparts/eyes/eyes_girlnextdoor_2013/texture.swf', '0x5b351c'),
         facePart('com.moviestarplanet.moviestar.valueObjects.Eye', 'EyeId', 2, 'swf/dragonbone_faceparts/eyes/eyes_boynextdoor_2013/texture.swf', '0x5b351c'),
@@ -1305,14 +1362,34 @@ const registerNewUserData = () => withCollectionAliases(typed('com.moviestarplan
         { SkinId: 2, _SkinId: 2, SWF: 'swf/skins/maleskin.swf', _SWF: 'swf/skins/maleskin.swf', SkinColor: '0xffd1b3', _SkinColor: '0xffd1b3', Gender: 'Male' }
     ],
     skinColors: ['0xffd1b3', '0xe8b48f', '0xc58a65', '0x8a5a44'],
-    clothes: starterClothes(),
-    hairs: starterClothes().filter((item) => item.Cloth && item.Cloth.ClothesCategory && item.Cloth.ClothesCategory.SlotTypeId === 2),
-    tops: starterClothes().filter((item) => item.Cloth && item.Cloth.ClothesCategory && item.Cloth.ClothesCategory.SlotTypeId === 3),
-    bottoms: starterClothes().filter((item) => item.Cloth && item.Cloth.ClothesCategory && item.Cloth.ClothesCategory.SlotTypeId === 4),
-    shoes: starterClothes().filter((item) => item.Cloth && item.Cloth.ClothesCategory && item.Cloth.ClothesCategory.SlotTypeId === 5),
+    clothes: clothItems(rels),
+    actorClothesRels: rels,
+    hairs: clothItems(hairRels),
+    hairActorClothesRels: hairRels,
+    tops: clothItems(topRels),
+    topActorClothesRels: topRels,
+    bottoms: clothItems(bottomRels),
+    bottomActorClothesRels: bottomRels,
+    shoes: clothItems(shoeRels),
+    shoeActorClothesRels: shoeRels,
+    femaleActor,
+    maleActor,
+    defaultActor: femaleActor,
+    defaultFemaleActor: femaleActor,
+    defaultMaleActor: maleActor,
+    actorDetails: femaleActor,
+    girlActorDetails: femaleActor,
+    boyActorDetails: maleActor,
+    newActorCreationData: {
+        FemaleActorDetails: femaleActor,
+        MaleActorDetails: maleActor,
+        ActorClothesRels: rels,
+        Clothes: clothItems(rels)
+    },
     defaultFemaleSkinSWF: 'swf/skins/femaleskin.swf',
     defaultMaleSkinSWF: 'swf/skins/maleskin.swf'
-}));
+    }));
+};
 
 const DEV_ACTOR_ID = 1;
 const DEV_USERNAME = 'admin';
