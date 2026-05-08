@@ -14,12 +14,14 @@ const publicPath = path.join(__dirname, 'public');
 const assetCachePath = path.join(__dirname, 'asset-cache');
 const dbPath = path.join(__dirname, 'msp-db.json');
 const debugLogPath = path.join(__dirname, 'msp-debug.log');
+const serverPidPath = path.join(__dirname, 'msp-server.pid');
 const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || '';
 const mongoDbName = process.env.MONGODB_DB || 'msp_2016';
 const mongoStateCollection = process.env.MONGODB_STATE_COLLECTION || 'state';
 const defaultRemoteAssetBaseUrl = 'https://pub-2ec8e3c2f0a24e46ab1defac06482eb3.r2.dev';
+const defaultRemoteGatewayUrl = 'https://msp-2016.onrender.com';
 const remoteAssetBaseUrl = (process.env.REMOTE_ASSET_BASE_URL || defaultRemoteAssetBaseUrl).replace(/\/+$/, '');
-const remoteGatewayUrl = (process.env.REMOTE_GATEWAY_URL || '').replace(/\/+$/, '');
+const remoteGatewayUrl = (process.env.REMOTE_GATEWAY_URL || defaultRemoteGatewayUrl).replace(/\/+$/, '');
 const isDebugMode = process.env.MSP_DEBUG === '1';
 const isServerOnly = process.env.MSP_SERVER_ONLY === '1' || process.argv.includes('--server');
 const configuredPort = process.env.PORT || process.env.MSP_PORT || '';
@@ -2024,8 +2026,40 @@ const startServer = (port) => {
     });
 };
 
+const writeServerPid = () => {
+    if (!isServerOnly && !configuredPort) {
+        return;
+    }
+    try {
+        fs.writeFileSync(serverPidPath, String(process.pid), 'utf8');
+    } catch (err) {
+        log(`[PID] Nie udalo sie zapisac PID: ${err.message}`);
+    }
+};
+
+const removeServerPid = () => {
+    try {
+        if (fs.existsSync(serverPidPath)) {
+            fs.unlinkSync(serverPidPath);
+        }
+    } catch (err) {
+        log(`[PID] Nie udalo sie usunac PID: ${err.message}`);
+    }
+};
+
+process.on('exit', removeServerPid);
+process.on('SIGINT', () => {
+    removeServerPid();
+    process.exit(0);
+});
+process.on('SIGTERM', () => {
+    removeServerPid();
+    process.exit(0);
+});
+
 const start = async () => {
     db = await loadDb();
+    writeServerPid();
     if (configuredPort) {
         startServer(Number(configuredPort));
         return;

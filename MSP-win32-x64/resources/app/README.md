@@ -53,6 +53,14 @@ REMOTE_GATEWAY_URL=https://your-server.example
 
 With this set, the local client still serves Flash/assets, but all `Gateway.aspx` AMF calls are proxied to your hosted backend. That hosted backend is the only place that should have `MONGODB_URI`.
 
+Right now the default hosted gateway is:
+
+```text
+https://msp-2016.onrender.com
+```
+
+So `MSP.exe` can start without creating `.env` first.
+
 ## Always-on backend
 
 To run the backend on a VPS or another always-on host, upload this `resources/app` folder, create `.env`, and run:
@@ -85,6 +93,15 @@ Player clients should not contain `MONGODB_URI`. Give them only:
 REMOTE_GATEWAY_URL=https://your-server.example
 REMOTE_ASSET_BASE_URL=https://pub-2ec8e3c2f0a24e46ab1defac06482eb3.r2.dev
 ```
+
+## No terminal on Windows
+
+For click-only usage inside `MSP-win32-x64`:
+
+- `MSP.exe` starts the normal game client.
+- `MSP-Debug.exe` starts the debug client.
+- `MSP-Backend.vbs` starts the backend hidden in the background.
+- `MSP-Backend-Stop.cmd` stops that backend process.
 
 PowerShell example for local MongoDB without `.env`:
 
