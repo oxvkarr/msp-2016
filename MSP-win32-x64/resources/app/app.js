@@ -570,7 +570,7 @@ const downloadRemoteAsset = (url, destination) => new Promise((resolve, reject) 
     });
 });
 
-const proxyGatewayRequest = (req, res, method) => {
+const proxyGatewayRequest = (req, res, method, fallbackHandler) => {
     if (!remoteGatewayUrl) return false;
 
     const targetUrl = new URL(`${remoteGatewayUrl}/Gateway.aspx`);
@@ -579,6 +579,21 @@ const proxyGatewayRequest = (req, res, method) => {
     }
     const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
     const client = targetUrl.protocol === 'https:' ? https : http;
+    let settled = false;
+    const fallback = (reason) => {
+        if (settled || res.headersSent) return;
+        settled = true;
+        if (typeof fallbackHandler === 'function') {
+            fallbackHandler(reason).catch((err) => {
+                log(`[REMOTE GATEWAY FALLBACK FAIL] ${method || ''} ${err.stack || err.message}`);
+                if (!res.headersSent) {
+                    res.status(502).type('text/plain').send('Remote gateway unavailable');
+                }
+            });
+            return;
+        }
+        res.status(502).type('text/plain').send('Remote gateway unavailable');
+    };
     const proxyReq = client.request(targetUrl, {
         method: req.method,
         headers: {
@@ -587,21 +602,30 @@ const proxyGatewayRequest = (req, res, method) => {
         },
         timeout: remoteGatewayTimeoutMs
     }, (proxyRes) => {
-        res.status(proxyRes.statusCode || 502);
-        res.set('Content-Type', proxyRes.headers['content-type'] || 'application/x-amf');
-        let responseBytes = 0;
+        const chunks = [];
         proxyRes.on('data', (chunk) => {
-            responseBytes += chunk.length;
+            chunks.push(chunk);
         });
         proxyRes.on('end', () => {
-            log(`[REMOTE GATEWAY OK] ${method || ''} status=${proxyRes.statusCode || 0} bytes=${responseBytes}`);
+            if (settled || res.headersSent) return;
+            const responseBody = Buffer.concat(chunks);
+            const statusCode = proxyRes.statusCode || 502;
+            if (statusCode >= 500) {
+                log(`[REMOTE GATEWAY BAD STATUS] ${method || ''} status=${statusCode} bytes=${responseBody.length}`);
+                fallback(`remote status ${statusCode}`);
+                return;
+            }
+            settled = true;
+            log(`[REMOTE GATEWAY OK] ${method || ''} status=${statusCode} bytes=${responseBody.length}`);
+            res.status(statusCode);
+            res.set('Content-Type', proxyRes.headers['content-type'] || 'application/x-amf');
+            res.send(responseBody);
         });
-        proxyRes.pipe(res);
     });
 
     proxyReq.on('error', (err) => {
         log(`[REMOTE GATEWAY FAIL] ${targetUrl.toString()} ${err.message}`);
-        res.status(502).type('text/plain').send('Remote gateway unavailable');
+        fallback(err.message);
     });
     proxyReq.on('timeout', () => {
         proxyReq.destroy(new Error('Remote gateway timeout'));
@@ -2064,11 +2088,11 @@ const getAmfResultForMethod = async (method, args = []) => {
     return null;
 };
 
-app.all('/Gateway.aspx', async (req, res) => {
+const handleLocalGatewayRequest = async (req, res, fallbackReason = '') => {
     const size = Buffer.isBuffer(req.body) ? req.body.length : 0;
     const method = req.query.method || '';
-    if (proxyGatewayRequest(req, res, method)) {
-        return;
+    if (fallbackReason) {
+        log(`[REMOTE GATEWAY LOCAL FALLBACK] ${method} ${fallbackReason}`);
     }
     const envelope = parseAmfEnvelope(req.body);
     const responseUri = envelope && envelope.messages[0] ? envelope.messages[0].response : '/1';
@@ -2101,6 +2125,14 @@ app.all('/Gateway.aspx', async (req, res) => {
             debugLabel: `${method} ERROR_FALLBACK`
         }));
     }
+};
+
+app.all('/Gateway.aspx', async (req, res) => {
+    const method = req.query.method || '';
+    if (proxyGatewayRequest(req, res, method, (reason) => handleLocalGatewayRequest(req, res, reason))) {
+        return;
+    }
+    await handleLocalGatewayRequest(req, res);
 });
 
 app.get('/getConfig', (req, res) => {
