@@ -358,7 +358,7 @@ const fallbackPlayHtml = () => `<!doctype html>
                 if (line.indexOf('[REMOTE ASSET TRY MISS]') !== -1 || line.indexOf('[REMOTE ASSET MISS]') !== -1 || line.indexOf('[MISS]') !== -1) setLight('assets', 'warn', 'Pliki');
                 if (line.indexOf('[TRANSLATION]') !== -1 || line.indexOf('pl_pl_resourcemodule') !== -1) setLight('locale', 'good', 'PL');
                 if (line.indexOf('[TRANSLATION MISS]') !== -1 || line.indexOf('MISSING_LOCALE') !== -1) setLight('locale', 'bad', 'PL');
-                if (line.indexOf('[AMF RESPONSE]') !== -1 || line.indexOf('[REMOTE GATEWAY]') !== -1) setLight('amf', 'good', 'AMF');
+                if (line.indexOf('[AMF RESPONSE]') !== -1 || line.indexOf('[REMOTE GATEWAY]') !== -1 || line.indexOf('[REMOTE GATEWAY OK]') !== -1) setLight('amf', 'good', 'AMF');
                 if (line.indexOf('[AMF ERROR]') !== -1 || line.indexOf('[AMF DECODE MISS]') !== -1 || line.indexOf('[REMOTE GATEWAY FAIL]') !== -1) setLight('amf', 'warn', 'AMF');
             }
             function write(level, args) {
@@ -589,6 +589,13 @@ const proxyGatewayRequest = (req, res, method) => {
     }, (proxyRes) => {
         res.status(proxyRes.statusCode || 502);
         res.set('Content-Type', proxyRes.headers['content-type'] || 'application/x-amf');
+        let responseBytes = 0;
+        proxyRes.on('data', (chunk) => {
+            responseBytes += chunk.length;
+        });
+        proxyRes.on('end', () => {
+            log(`[REMOTE GATEWAY OK] ${method || ''} status=${proxyRes.statusCode || 0} bytes=${responseBytes}`);
+        });
         proxyRes.pipe(res);
     });
 
