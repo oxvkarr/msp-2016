@@ -1172,7 +1172,17 @@ const buildAmfResponse = (version, responseUri, value, options = {}) => {
     return Buffer.concat([envelope, messageCount, target, response, length, body]);
 };
 
-const facePart = (className, idField, id, swf, colors = '') => typed(className, {
+const REG_NEW_USER_FEMALE = 1;
+const REG_NEW_USER_MALE = 2;
+const REG_NEW_USER_UNISEX = 3;
+
+const registerFlagForGender = (gender) => {
+    if (gender === 'Female') return REG_NEW_USER_FEMALE;
+    if (gender === 'Male') return REG_NEW_USER_MALE;
+    return REG_NEW_USER_UNISEX;
+};
+
+const facePart = (className, idField, id, swf, colors = '', regNewUser = REG_NEW_USER_UNISEX) => typed(className, {
     [idField]: id,
     [`_${idField}`]: id,
     Id: id,
@@ -1187,8 +1197,8 @@ const facePart = (className, idField, id, swf, colors = '') => typed(className, 
     _SkinId: 0,
     DefaultColors: colors,
     _DefaultColors: colors,
-    RegNewUser: true,
-    _RegNewUser: true,
+    RegNewUser: regNewUser,
+    _RegNewUser: regNewUser,
     sortorder: id,
     _sortorder: id,
     hidden: false,
@@ -1196,6 +1206,8 @@ const facePart = (className, idField, id, swf, colors = '') => typed(className, 
 });
 
 const cloth = (id, swf, filename, slotTypeId, gender, colors = '') => {
+    const isFemale = gender === 'Female';
+    const regNewUser = registerFlagForGender(gender);
     const slotType = typed('com.moviestarplanet.moviestar.valueObjects.SlotType', {
         SlotTypeId: slotTypeId,
         _SlotTypeId: slotTypeId
@@ -1226,8 +1238,8 @@ const cloth = (id, swf, filename, slotTypeId, gender, colors = '') => {
         _Scale: 1,
         Vip: false,
         _Vip: false,
-        RegNewUser: true,
-        _RegNewUser: true,
+        RegNewUser: regNewUser,
+        _RegNewUser: regNewUser,
         sortorder: id,
         _sortorder: id,
         isNew: false,
@@ -1240,7 +1252,13 @@ const cloth = (id, swf, filename, slotTypeId, gender, colors = '') => {
         _DiamondsPrice: 0,
         ColorScheme: colors,
         _ColorScheme: colors,
-        Gender: gender,
+        Gender: regNewUser,
+        _Gender: regNewUser,
+        GenderName: gender,
+        _GenderName: gender,
+        IsFemale: isFemale,
+        _IsFemale: isFemale,
+        isFemale,
         ClothesCategory: clothesCategory,
         _ClothesCategory: clothesCategory,
         ThemeId: 0,
@@ -1336,8 +1354,6 @@ const registerNewUserData = () => {
     const topRels = relsBySlot(rels, 3);
     const bottomRels = relsBySlot(rels, 4);
     const shoeRels = relsBySlot(rels, 5);
-    const femaleActor = defaultRegisterActor('Female', rels);
-    const maleActor = defaultRegisterActor('Male', rels);
     return withCollectionAliases(typed('com.moviestarplanet.moviestar.valueObjects.RegisterNewUserData', {
     eyes: [
         facePart('com.moviestarplanet.moviestar.valueObjects.Eye', 'EyeId', 1, 'swf/dragonbone_faceparts/eyes/eyes_girlnextdoor_2013/texture.swf', '0x5b351c'),
@@ -1358,34 +1374,18 @@ const registerNewUserData = () => {
         facePart('com.moviestarplanet.moviestar.valueObjects.EyeShadow', 'EyeShadowId', 1, 'swf/dragonbone_faceparts/eyeshadow/eyeshadow_party_2013/texture.swf', '0x333333')
     ],
     skins: [
-        { SkinId: 1, _SkinId: 1, SWF: 'swf/skins/femaleskin.swf', _SWF: 'swf/skins/femaleskin.swf', SkinColor: '0xffd1b3', _SkinColor: '0xffd1b3', Gender: 'Female' },
-        { SkinId: 2, _SkinId: 2, SWF: 'swf/skins/maleskin.swf', _SWF: 'swf/skins/maleskin.swf', SkinColor: '0xffd1b3', _SkinColor: '0xffd1b3', Gender: 'Male' }
+        { SkinId: 1, _SkinId: 1, SWF: 'swf/skins/femaleskin.swf', _SWF: 'swf/skins/femaleskin.swf', SkinColor: '0xffd1b3', _SkinColor: '0xffd1b3', RegNewUser: REG_NEW_USER_FEMALE, _RegNewUser: REG_NEW_USER_FEMALE, IsFemale: true, _IsFemale: true, isFemale: true },
+        { SkinId: 2, _SkinId: 2, SWF: 'swf/skins/maleskin.swf', _SWF: 'swf/skins/maleskin.swf', SkinColor: '0xffd1b3', _SkinColor: '0xffd1b3', RegNewUser: REG_NEW_USER_MALE, _RegNewUser: REG_NEW_USER_MALE, IsFemale: false, _IsFemale: false, isFemale: false }
     ],
     skinColors: ['0xffd1b3', '0xe8b48f', '0xc58a65', '0x8a5a44'],
     clothes: clothItems(rels),
-    actorClothesRels: rels,
+    hair: clothItems(hairRels),
     hairs: clothItems(hairRels),
-    hairActorClothesRels: hairRels,
     tops: clothItems(topRels),
-    topActorClothesRels: topRels,
     bottoms: clothItems(bottomRels),
-    bottomActorClothesRels: bottomRels,
+    footwear: clothItems(shoeRels),
     shoes: clothItems(shoeRels),
-    shoeActorClothesRels: shoeRels,
-    femaleActor,
-    maleActor,
-    defaultActor: femaleActor,
-    defaultFemaleActor: femaleActor,
-    defaultMaleActor: maleActor,
-    actorDetails: femaleActor,
-    girlActorDetails: femaleActor,
-    boyActorDetails: maleActor,
-    newActorCreationData: {
-        FemaleActorDetails: femaleActor,
-        MaleActorDetails: maleActor,
-        ActorClothesRels: rels,
-        Clothes: clothItems(rels)
-    },
+    headwear: [],
     defaultFemaleSkinSWF: 'swf/skins/femaleskin.swf',
     defaultMaleSkinSWF: 'swf/skins/maleskin.swf'
     }));
