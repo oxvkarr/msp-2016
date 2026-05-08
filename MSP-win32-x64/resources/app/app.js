@@ -28,7 +28,7 @@ const isServerOnly = process.env.MSP_SERVER_ONLY === '1' || process.argv.include
 const useRemoteGateway = Boolean(remoteGatewayUrl) && !isServerOnly;
 const shouldProxyRemoteGateway = (method) => {
     if (!useRemoteGateway) return false;
-    return /MovieStarPlanet\.WebService\.User\.(AMFUserServiceWeb|AMFUserService)\.(Login|Login2|CreateNewUser|CreateNewUserOld)$/i.test(method || '');
+    return /MovieStarPlanet\.WebService\.User\.(AMFUserServiceWeb|AMFUserService)\.(CreateNewUser|CreateNewUserOld)$/i.test(method || '');
 };
 const configuredPort = process.env.PORT || process.env.MSP_PORT || '';
 const normalizeLocaleCode = (value) => {
