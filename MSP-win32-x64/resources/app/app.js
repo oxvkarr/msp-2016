@@ -21,6 +21,14 @@ const defaultRemoteAssetBaseUrl = 'https://pub-2ec8e3c2f0a24e46ab1defac06482eb3.
 const remoteAssetBaseUrl = (process.env.REMOTE_ASSET_BASE_URL || defaultRemoteAssetBaseUrl).replace(/\/+$/, '');
 const remoteGatewayUrl = (process.env.REMOTE_GATEWAY_URL || '').replace(/\/+$/, '');
 const isDebugMode = process.env.MSP_DEBUG === '1';
+const normalizeLocaleCode = (value) => {
+    const parts = String(value || 'pl_PL').replace('-', '_').split('_');
+    const language = (parts[0] || 'pl').toLowerCase();
+    const country = (parts[1] || language).toUpperCase();
+    return `${language}_${country}`;
+};
+const forcedLocale = normalizeLocaleCode(process.env.MSP_LOCALE || 'pl_PL');
+const forcedLocalePath = forcedLocale.toLowerCase();
 let mongoClient = null;
 let mongoDatabase = null;
 let dbSource = 'json';
@@ -122,8 +130,8 @@ const fallbackPlayHtml = () => `<!doctype html>
         <param name="allowScriptAccess" value="always">
         <param name="allowFullScreen" value="true">
         <param name="wmode" value="direct">
-        <param name="flashvars" value="resourceModuleUrl=swf/locales/en_us_resourcemodule.swf?v=Main_20161102_160430&swfVer=Main_20161102_160430&translationsVersion=2016112_16431">
-        <embed src="/Main_20161102_160430.swf" allowScriptAccess="always" allowFullScreen="true" wmode="direct" flashvars="resourceModuleUrl=swf/locales/en_us_resourcemodule.swf?v=Main_20161102_160430&swfVer=Main_20161102_160430&translationsVersion=2016112_16431">
+        <param name="flashvars" value="resourceModuleUrl=swf/locales/${forcedLocalePath}_resourcemodule.swf?v=Main_20161102_160430&swfVer=Main_20161102_160430&translationsVersion=2016112_16431">
+        <embed src="/Main_20161102_160430.swf" allowScriptAccess="always" allowFullScreen="true" wmode="direct" flashvars="resourceModuleUrl=swf/locales/${forcedLocalePath}_resourcemodule.swf?v=Main_20161102_160430&swfVer=Main_20161102_160430&translationsVersion=2016112_16431">
     </object>
     <div id="debug-console">
         <header>
@@ -307,12 +315,16 @@ const serveRemoteAsset = async (req, res, cleanPath) => {
     return false;
 };
 
-app.get(['/languagemaps.txt', '/localization/languagemaps.txt'], (req, res) => {
+app.get(['/languagemaps.txt', '/localization/languagemaps.txt'], async (req, res) => {
     const filePath = path.join(publicPath, req.path.replace(/^\/+/, ''));
     log(`[LANGMAP] ${req.url} -> ${filePath}`);
     fs.readFile(filePath, 'utf8', (err, text) => {
         if (err) {
-            res.status(404).type('text/plain').send(`Missing language map: ${req.url}`);
+            serveRemoteAsset(req, res, req.path.replace(/^\/+/, '')).then((served) => {
+                if (!served) {
+                    res.status(404).type('text/plain').send(`Missing language map: ${req.url}`);
+                }
+            });
             return;
         }
         res.type('application/json').send(sanitizeLocalMap(text));
@@ -359,17 +371,25 @@ app.all('/translations/crossdomain.xml', (req, res) => {
     res.send(`<?xml version="1.0"?><cross-domain-policy><allow-access-from domain="*" to-ports="*" /></cross-domain-policy>`);
 });
 
-app.get('/:client(MSPWeb|MSPMobile)/:locale/myResources.txt', (req, res) => {
+app.get('/:client(MSPWeb|MSPMobile)/:locale/myResources.txt', async (req, res) => {
     const client = req.params.client.toLowerCase();
-    const locale = req.params.locale.toLowerCase();
-    const filePath = path.join(__dirname, 'public', 'translations', client, locale, 'myresources.txt');
+    const filePath = path.join(__dirname, 'public', 'translations', client, forcedLocalePath, 'myresources.txt');
     log(`[TRANSLATION] ${req.url} -> ${filePath}`);
-    res.type('text/plain').sendFile(filePath, (err) => {
-        if (err) {
-            log(`[TRANSLATION MISS] ${filePath}`);
-            res.status(err.statusCode || 404).type('text/plain').send(`Missing translation: ${req.url}`);
+    if (fs.existsSync(filePath)) {
+        res.type('text/plain').sendFile(filePath);
+        return;
+    }
+    const remotePaths = [
+        `${req.params.client}/${forcedLocale}/myResources.txt`,
+        `translations/${client}/${forcedLocalePath}/myresources.txt`
+    ];
+    for (const remotePath of remotePaths) {
+        if (await serveRemoteAsset(req, res, remotePath)) {
+            return;
         }
-    });
+    }
+    log(`[TRANSLATION MISS] ${filePath}`);
+    res.status(404).type('text/plain').send(`Missing translation: ${req.url}`);
 });
 
 app.use(express.static(publicPath));
