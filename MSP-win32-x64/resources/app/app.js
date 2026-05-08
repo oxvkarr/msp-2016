@@ -23,8 +23,13 @@ const isDebugMode = process.env.MSP_DEBUG === '1';
 let mongoClient = null;
 let mongoDatabase = null;
 let dbSource = 'json';
+const recentLogs = [];
 const log = (message) => {
     const line = `${new Date().toISOString()} ${message}`;
+    recentLogs.push(line);
+    if (recentLogs.length > 500) {
+        recentLogs.shift();
+    }
     if (isDebugMode) {
         console.log(message);
         fs.appendFile(debugLogPath, `${line}\n`, () => {});
@@ -1565,6 +1570,18 @@ app.get('/api/db/status', (req, res) => {
         mongoStateCollection,
         clothes: db.catalog && Array.isArray(db.catalog.clothes) ? db.catalog.clothes.length : 0,
         users: Array.isArray(db.users) ? db.users.length : 0
+    });
+});
+
+app.get('/api/debug/logs', (req, res) => {
+    if (!isDebugMode) {
+        res.status(404).json({ error: 'debug disabled' });
+        return;
+    }
+    const since = Math.max(0, Number(req.query.since) || 0);
+    res.json({
+        next: recentLogs.length,
+        lines: recentLogs.slice(since)
     });
 });
 

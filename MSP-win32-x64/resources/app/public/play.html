@@ -6,6 +6,61 @@
   <style>
     html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #000; }
     object, embed { width: 100%; height: 100%; display: block; }
+    #debug-console {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      height: 210px;
+      display: none;
+      grid-template-rows: 34px 1fr;
+      overflow: hidden;
+      background: rgba(8, 12, 18, 0.92);
+      border: 1px solid rgba(112, 184, 255, 0.38);
+      box-shadow: 0 18px 55px rgba(0, 0, 0, 0.55);
+      color: #d9ecff;
+      font: 12px Consolas, "Courier New", monospace;
+      z-index: 99999;
+    }
+    #debug-console.is-visible { display: grid; }
+    #debug-console.is-collapsed { height: 34px; }
+    #debug-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      background: linear-gradient(90deg, rgba(22, 35, 52, 0.96), rgba(12, 20, 31, 0.96));
+      border-bottom: 1px solid rgba(112, 184, 255, 0.22);
+      user-select: none;
+    }
+    #debug-title {
+      flex: 1;
+      color: #9fd2ff;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+    .debug-button {
+      width: 26px;
+      height: 24px;
+      border: 1px solid rgba(159, 210, 255, 0.35);
+      background: rgba(255, 255, 255, 0.06);
+      color: #d9ecff;
+      cursor: pointer;
+      font: inherit;
+    }
+    .debug-button:hover { background: rgba(159, 210, 255, 0.16); }
+    #debug-output {
+      overflow: auto;
+      padding: 9px 10px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .debug-line { color: #d9ecff; }
+    .debug-line.warn { color: #ffd37a; }
+    .debug-line.error { color: #ff8b8b; }
+    .debug-line.amf { color: #a9f0c7; }
+    .debug-line.req { color: #9fd2ff; }
   </style>
   <script>
     var fileVersion = 'Main_20161102_160430';
@@ -54,6 +109,71 @@
     window.onerror = function (message, source, line, column, error) {
       console.log('[JS ERROR]', message, source, line, column, error && error.stack ? error.stack : '');
     };
+
+    function setupDebugConsole() {
+      var params = new URLSearchParams(window.location.search);
+      if (params.get('debug') !== '1') return;
+
+      var panel = document.createElement('div');
+      panel.id = 'debug-console';
+      panel.className = 'is-visible';
+      panel.innerHTML =
+        '<div id="debug-toolbar">' +
+          '<span id="debug-title">MSP Debug Console</span>' +
+          '<button class="debug-button" id="debug-clear" title="Clear">C</button>' +
+          '<button class="debug-button" id="debug-toggle" title="Collapse">_</button>' +
+        '</div>' +
+        '<div id="debug-output"></div>';
+      document.body.appendChild(panel);
+
+      var output = document.getElementById('debug-output');
+      var clearButton = document.getElementById('debug-clear');
+      var toggleButton = document.getElementById('debug-toggle');
+      var next = 0;
+
+      function classFor(line) {
+        if (line.indexOf('[AMF') >= 0) return 'amf';
+        if (line.indexOf('[REQ]') >= 0) return 'req';
+        if (line.indexOf('ERROR') >= 0 || line.indexOf('FAIL') >= 0 || line.indexOf('CRASHED') >= 0) return 'error';
+        if (line.indexOf('MISS') >= 0 || line.indexOf('WARN') >= 0) return 'warn';
+        return '';
+      }
+
+      function appendLine(line) {
+        var item = document.createElement('div');
+        item.className = 'debug-line ' + classFor(line);
+        item.textContent = line;
+        output.appendChild(item);
+        while (output.childNodes.length > 300) {
+          output.removeChild(output.firstChild);
+        }
+        output.scrollTop = output.scrollHeight;
+      }
+
+      function poll() {
+        fetch('/api/debug/logs?since=' + next)
+          .then(function (res) { return res.ok ? res.json() : null; })
+          .then(function (data) {
+            if (!data) return;
+            next = data.next;
+            data.lines.forEach(appendLine);
+          })
+          .catch(function () {});
+      }
+
+      clearButton.onclick = function () {
+        output.textContent = '';
+      };
+      toggleButton.onclick = function () {
+        panel.classList.toggle('is-collapsed');
+        toggleButton.textContent = panel.classList.contains('is-collapsed') ? '+' : '_';
+      };
+
+      poll();
+      setInterval(poll, 700);
+    }
+
+    window.addEventListener('load', setupDebugConsole);
   </script>
 </head>
 <body>

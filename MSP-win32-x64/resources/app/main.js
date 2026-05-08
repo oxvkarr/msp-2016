@@ -129,7 +129,7 @@ function createWindow() {
             debugLog('[WINDOW UNRESPONSIVE]');
         });
     }
-    mainWindow.loadURL('http://127.0.0.1/play.html');
+    mainWindow.loadURL(`http://127.0.0.1/play.html${isDebugMode ? '?debug=1' : ''}`);
 }
 
 app.on('ready', createWindow);
