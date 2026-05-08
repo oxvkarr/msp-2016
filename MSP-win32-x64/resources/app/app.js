@@ -17,7 +17,8 @@ const debugLogPath = path.join(__dirname, 'msp-debug.log');
 const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || '';
 const mongoDbName = process.env.MONGODB_DB || 'msp_2016';
 const mongoStateCollection = process.env.MONGODB_STATE_COLLECTION || 'state';
-const remoteAssetBaseUrl = (process.env.REMOTE_ASSET_BASE_URL || '').replace(/\/+$/, '');
+const defaultRemoteAssetBaseUrl = 'https://pub-2ec8e3c2f0a24e46ab1defac06482eb3.r2.dev';
+const remoteAssetBaseUrl = (process.env.REMOTE_ASSET_BASE_URL || defaultRemoteAssetBaseUrl).replace(/\/+$/, '');
 const remoteGatewayUrl = (process.env.REMOTE_GATEWAY_URL || '').replace(/\/+$/, '');
 const isDebugMode = process.env.MSP_DEBUG === '1';
 let mongoClient = null;
@@ -52,11 +53,130 @@ app.all('/crossdomain.xml', (req, res) => {
     res.send(`<?xml version="1.0"?><cross-domain-policy><allow-access-from domain="*" to-ports="*" /></cross-domain-policy>`);
 });
 
+const fallbackPlayHtml = () => `<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>MSP</title>
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+        }
+        object, embed {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #debug-console {
+            position: fixed;
+            right: 14px;
+            bottom: 14px;
+            z-index: 999999;
+            width: 440px;
+            max-width: calc(100vw - 28px);
+            height: 260px;
+            display: none;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,.18);
+            border-radius: 8px;
+            background: rgba(14, 18, 28, .94);
+            box-shadow: 0 16px 60px rgba(0,0,0,.45);
+            color: #e8eefc;
+            font: 12px Consolas, monospace;
+        }
+        #debug-console header {
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 10px;
+            background: rgba(255,255,255,.08);
+            font: 600 12px Arial, sans-serif;
+        }
+        #debug-console button {
+            height: 24px;
+            border: 0;
+            border-radius: 5px;
+            background: #2f80ed;
+            color: #fff;
+            cursor: pointer;
+            font: 600 11px Arial, sans-serif;
+        }
+        #debug-log {
+            height: 226px;
+            margin: 0;
+            padding: 10px;
+            overflow: auto;
+            white-space: pre-wrap;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+    <object id="msp" type="application/x-shockwave-flash" data="/Main_20161102_160430.swf">
+        <param name="movie" value="/Main_20161102_160430.swf">
+        <param name="allowScriptAccess" value="always">
+        <param name="allowFullScreen" value="true">
+        <param name="wmode" value="direct">
+        <param name="flashvars" value="resourceModuleUrl=swf/locales/en_us_resourcemodule.swf?v=Main_20161102_160430&swfVer=Main_20161102_160430&translationsVersion=2016112_16431">
+        <embed src="/Main_20161102_160430.swf" allowScriptAccess="always" allowFullScreen="true" wmode="direct" flashvars="resourceModuleUrl=swf/locales/en_us_resourcemodule.swf?v=Main_20161102_160430&swfVer=Main_20161102_160430&translationsVersion=2016112_16431">
+    </object>
+    <div id="debug-console">
+        <header>
+            <span>MSP Debug Console</span>
+            <button id="debug-clear" type="button">Clear</button>
+        </header>
+        <pre id="debug-log"></pre>
+    </div>
+    <script>
+        (function () {
+            var debug = new URLSearchParams(location.search).get('debug') === '1';
+            var panel = document.getElementById('debug-console');
+            var output = document.getElementById('debug-log');
+            var clear = document.getElementById('debug-clear');
+            function write(level, args) {
+                if (!debug || !output) return;
+                var text = Array.prototype.slice.call(args).map(function (item) {
+                    if (typeof item === 'string') return item;
+                    try { return JSON.stringify(item); } catch (e) { return String(item); }
+                }).join(' ');
+                output.textContent += '[' + level + '] ' + text + '\\n';
+                output.scrollTop = output.scrollHeight;
+            }
+            if (debug && panel) panel.style.display = 'block';
+            ['log', 'warn', 'error'].forEach(function (level) {
+                var original = console[level];
+                console[level] = function () {
+                    write(level.toUpperCase(), arguments);
+                    return original.apply(console, arguments);
+                };
+            });
+            window.onerror = function (message, source, line) {
+                write('ERROR', [message + ' @ ' + source + ':' + line]);
+            };
+            if (clear) clear.onclick = function () { output.textContent = ''; };
+            console.log('Fallback play.html loaded');
+        }());
+    </script>
+</body>
+</html>`;
+
+const sendPlayHtml = (req, res) => {
+    const filePath = path.join(publicPath, 'play.html');
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+        return;
+    }
+    log(`[FALLBACK] ${req.url} -> embedded play.html`);
+    res.type('html').send(fallbackPlayHtml());
+};
 
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'play.html'));
-});
+app.get(['/', '/play.html'], sendPlayHtml);
 app.get('/cdnpath.txt', (req, res) => {
     res.type('text/plain').send('http://127.0.0.1/');
 });
@@ -68,7 +188,7 @@ const sanitizeLocalMap = (text) => text
     .replace(/https?:\/\/(?:[a-z0-9-]+\.)?mspcdns\.com\//gi, 'http://127.0.0.1/');
 
 const remoteAssetExtensions = new Set([
-    '.swf', '.png', '.jpg', '.jpeg', '.gif', '.mp3', '.txt', '.xml', '.json', '.css'
+    '.swf', '.png', '.jpg', '.jpeg', '.gif', '.mp3', '.txt', '.xml', '.json', '.css', '.html', '.js'
 ]);
 
 const contentTypeFor = (filePath) => {
@@ -83,7 +203,9 @@ const contentTypeFor = (filePath) => {
         '.txt': 'text/plain',
         '.xml': 'text/xml',
         '.json': 'application/json',
-        '.css': 'text/css'
+        '.css': 'text/css',
+        '.html': 'text/html',
+        '.js': 'application/javascript'
     }[ext] || 'application/octet-stream';
 };
 

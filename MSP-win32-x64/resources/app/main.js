@@ -49,7 +49,15 @@ const waitForLocalServer = (attempts = 60) => new Promise((resolve) => {
     const check = (left) => {
         const req = require('http').get(`${LOCAL_BASE_URL}/play.html`, (res) => {
             res.resume();
-            resolve(true);
+            if (res.statusCode >= 200 && res.statusCode < 400) {
+                resolve(true);
+                return;
+            }
+            if (left <= 1) {
+                resolve(false);
+                return;
+            }
+            setTimeout(() => check(left - 1), 250);
         });
         req.on('error', () => {
             if (left <= 1) {
