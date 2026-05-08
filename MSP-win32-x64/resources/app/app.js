@@ -263,8 +263,8 @@ const fallbackPlayHtml = () => `<!doctype html>
         <param name="allowScriptAccess" value="always">
         <param name="allowFullScreen" value="true">
         <param name="wmode" value="direct">
-        <param name="flashvars" value="resourceModuleUrl=swf/locales/${forcedLocalePath}_resourcemodule.swf?v=Main_20161102_160430&swfVer=Main_20161102_160430&translationsVersion=2016112_16431">
-        <embed src="/Main_20161102_160430.swf" allowScriptAccess="always" allowFullScreen="true" wmode="direct" flashvars="resourceModuleUrl=swf/locales/${forcedLocalePath}_resourcemodule.swf?v=Main_20161102_160430&swfVer=Main_20161102_160430&translationsVersion=2016112_16431">
+        <param name="flashvars" value="country=pl&locale=pl_PL&language=pl&selectedLocale=pl_PL&resourceModuleUrl=swf/locales/${forcedLocalePath}_resourcemodule.swf?v=Main_20161102_160430&swfVer=Main_20161102_160430&translationsVersion=2016112_16431">
+        <embed src="/Main_20161102_160430.swf" allowScriptAccess="always" allowFullScreen="true" wmode="direct" flashvars="country=pl&locale=pl_PL&language=pl&selectedLocale=pl_PL&resourceModuleUrl=swf/locales/${forcedLocalePath}_resourcemodule.swf?v=Main_20161102_160430&swfVer=Main_20161102_160430&translationsVersion=2016112_16431">
     </object>
     <div id="debug-console">
         <header id="debug-drag">
@@ -522,6 +522,44 @@ const sanitizeLocalMap = (text) => text
     .replace(/https?:\/\/(?:[a-z0-9-]+\.)?mspapis\.com\//gi, 'http://127.0.0.1/')
     .replace(/https?:\/\/(?:[a-z0-9-]+\.)?mspcdns\.com\//gi, 'http://127.0.0.1/');
 
+const disabledCountryUrl = 'http://127.0.0.1/server-unavailable.html';
+const localCountry = (country, iso, locale, txt, enabled = false) => ({
+    country,
+    redirectUrl: enabled ? 'http://127.0.0.1/play.html' : disabledCountryUrl,
+    locale,
+    sys_cap: locale.split('_')[0],
+    ISO_3166: iso,
+    txt,
+    supportMail: 'support@msp-2016.local',
+    cdnLocalBasePath: 'http://127.0.0.1/',
+    infoSiteMap: 'http://127.0.0.1/'
+});
+const localLanguageMaps = [
+    localCountry('Poland', 'pl', 'pl_PL', 'MovieStarPlanet.pl', true),
+    localCountry('Germany', 'de', 'de_DE', 'MovieStarPlanet.de'),
+    localCountry('England', 'gb', 'en_US', 'MovieStarPlanet.co.uk'),
+    localCountry('UnitedStates', 'us', 'en_US', 'MovieStarPlanet.com'),
+    localCountry('France', 'fr', 'fr_FR', 'MovieStarPlanet.fr'),
+    localCountry('Netherlands', 'nl', 'nl_NL', 'MovieStarPlanet.nl'),
+    localCountry('Sweden', 'se', 'sv_SE', 'MovieStarPlanet.se'),
+    localCountry('Denmark', 'dk', 'da_DK', 'MovieStarPlanet.dk'),
+    localCountry('Norway', 'no', 'nb_NO', 'MovieStarPlanet.no'),
+    localCountry('Finland', 'fi', 'fi_FI', 'MovieStarPlanet.fi'),
+    localCountry('Turkey', 'tr', 'tr_TR', 'MovieStarPlanet.com.tr')
+];
+const localInfoSites = [{
+    country: 'pl',
+    baseURL: 'http://127.0.0.1/',
+    about: 'server-unavailable.html',
+    parents: 'server-unavailable.html',
+    teachers: 'server-unavailable.html',
+    userGuide: 'server-unavailable.html',
+    safety: 'server-unavailable.html',
+    privacyPolicy: 'server-unavailable.html',
+    termsConditions: 'server-unavailable.html',
+    contact: 'server-unavailable.html'
+}];
+
 const remoteAssetExtensions = new Set([
     '.swf', '.png', '.jpg', '.jpeg', '.gif', '.mp3', '.txt', '.xml', '.json', '.css', '.html', '.js'
 ]);
@@ -702,19 +740,73 @@ const serveRemoteAsset = async (req, res, cleanPath) => {
 };
 
 app.get(['/languagemaps.txt', '/localization/languagemaps.txt'], async (req, res) => {
-    const filePath = path.join(publicPath, req.path.replace(/^\/+/, ''));
-    log(`[LANGMAP] ${req.url} -> ${filePath}`);
-    fs.readFile(filePath, 'utf8', (err, text) => {
-        if (err) {
-            serveRemoteAsset(req, res, req.path.replace(/^\/+/, '')).then((served) => {
-                if (!served) {
-                    res.status(404).type('text/plain').send(`Missing language map: ${req.url}`);
-                }
-            });
-            return;
+    log(`[LANGMAP] ${req.url} -> forced pl_PL`);
+    res.type('application/json').send(JSON.stringify(localLanguageMaps, null, 2));
+});
+
+app.get('/localization/infosites.txt', (req, res) => {
+    log(`[INFOSITES] ${req.url} -> forced pl`);
+    res.type('application/json').send(JSON.stringify(localInfoSites, null, 2));
+});
+
+app.get('/server-unavailable.html', (req, res) => {
+    res.type('html').send(`<!doctype html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <title>MovieStarPlanet - nowe serwery</title>
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            background: radial-gradient(circle at center, #243b72 0%, #111827 55%, #070a12 100%);
+            color: #fff;
+            font-family: Arial, sans-serif;
         }
-        res.type('application/json').send(sanitizeLocalMap(text));
-    });
+        main {
+            min-height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            text-align: center;
+            padding: 32px;
+            box-sizing: border-box;
+        }
+        object {
+            width: 260px;
+            height: 160px;
+        }
+        h1 {
+            margin: 0;
+            font-size: 34px;
+        }
+        p {
+            margin: 0;
+            color: #dbeafe;
+            font-size: 20px;
+        }
+        a {
+            color: #fff;
+            background: #ec4899;
+            border-radius: 8px;
+            padding: 12px 18px;
+            text-decoration: none;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <object type="application/x-shockwave-flash" data="/swf/world/frameIcons/MSP_Logo.swf"></object>
+        <h1>Pracujemy nad tym</h1>
+        <p>Nowe serwery wkrotce.</p>
+        <a href="/play.html">Wroc do polskiego serwera</a>
+    </main>
+</body>
+</html>`);
 });
 
 app.get(/^\/(?:null)?lookdata_[0-9_]+$/i, (req, res) => {
@@ -2014,8 +2106,8 @@ const getAmfResultForMethod = async (method, args = []) => {
         return {
             Success: true,
             ServerTime: new Date().toISOString(),
-            Language: 'en_US',
-            Country: 'us',
+            Language: 'pl_PL',
+            Country: 'pl',
             CdnBasePath: 'http://127.0.0.1/',
             CdnLocalBasePath: 'http://127.0.0.1/',
             WebServerPath: 'http://127.0.0.1/'
