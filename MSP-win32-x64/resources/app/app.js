@@ -112,6 +112,14 @@ const fallbackPlayHtml = () => `<!doctype html>
             padding: 0 10px;
             background: rgba(255,255,255,.08);
             font: 600 12px Arial, sans-serif;
+            cursor: move;
+            user-select: none;
+        }
+        #debug-title {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         #debug-console .debug-actions {
             display: flex;
@@ -129,6 +137,26 @@ const fallbackPlayHtml = () => `<!doctype html>
         }
         #debug-console button.secondary {
             background: rgba(255,255,255,.13);
+        }
+        #debug-console.minimized {
+            height: 34px;
+        }
+        #debug-console.minimized .debug-body {
+            display: none;
+        }
+        #debug-links {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+        }
+        #debug-links button {
+            width: 100%;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         #debug-stats {
             display: grid;
@@ -234,38 +262,49 @@ const fallbackPlayHtml = () => `<!doctype html>
         <embed src="/Main_20161102_160430.swf" allowScriptAccess="always" allowFullScreen="true" wmode="direct" flashvars="resourceModuleUrl=swf/locales/${forcedLocalePath}_resourcemodule.swf?v=Main_20161102_160430&swfVer=Main_20161102_160430&translationsVersion=2016112_16431">
     </object>
     <div id="debug-console">
-        <header>
-            <span>MSP Dev Panel</span>
+        <header id="debug-drag">
+            <span id="debug-title">MSP Dev Panel</span>
             <div class="debug-actions">
+                <button id="debug-minimize" class="secondary" type="button">_</button>
                 <button id="debug-pause" class="secondary" type="button">Pause</button>
                 <button id="debug-copy" class="secondary" type="button">Copy</button>
                 <button id="debug-clear" type="button">Clear</button>
             </div>
         </header>
-        <section id="debug-stats">
-            <div class="debug-stat">DB<strong id="debug-db">...</strong></div>
-            <div class="debug-stat">REQ<strong id="debug-req">0</strong></div>
-            <div class="debug-stat">AMF<strong id="debug-amf">0</strong></div>
-            <div class="debug-stat">Assety<strong id="debug-assets">0</strong></div>
-        </section>
-        <section id="debug-lights">
-            <div id="light-server" class="debug-light warn"><span class="debug-light-dot"></span><span>Serwer</span></div>
-            <div id="light-assets" class="debug-light warn"><span class="debug-light-dot"></span><span>Pliki</span></div>
-            <div id="light-locale" class="debug-light warn"><span class="debug-light-dot"></span><span>PL</span></div>
-            <div id="light-amf" class="debug-light warn"><span class="debug-light-dot"></span><span>AMF</span></div>
-            <div id="light-db" class="debug-light warn"><span class="debug-light-dot"></span><span>Baza</span></div>
-        </section>
-        <div id="debug-filter-row">
-            <input id="debug-filter" placeholder="Filtr logów, np. Gateway albo MISS">
-            <button id="debug-scroll" class="secondary" type="button">Bottom</button>
+        <div class="debug-body">
+            <section id="debug-stats">
+                <div class="debug-stat">DB<strong id="debug-db">...</strong></div>
+                <div class="debug-stat">REQ<strong id="debug-req">0</strong></div>
+                <div class="debug-stat">AMF<strong id="debug-amf">0</strong></div>
+                <div class="debug-stat">Assety<strong id="debug-assets">0</strong></div>
+            </section>
+            <section id="debug-lights">
+                <div id="light-server" class="debug-light warn"><span class="debug-light-dot"></span><span>Serwer</span></div>
+                <div id="light-assets" class="debug-light warn"><span class="debug-light-dot"></span><span>Pliki</span></div>
+                <div id="light-locale" class="debug-light warn"><span class="debug-light-dot"></span><span>PL</span></div>
+                <div id="light-amf" class="debug-light warn"><span class="debug-light-dot"></span><span>AMF</span></div>
+                <div id="light-db" class="debug-light warn"><span class="debug-light-dot"></span><span>Baza</span></div>
+            </section>
+            <section id="debug-links">
+                <button class="secondary debug-link" data-url="https://msp-2016.onrender.com/api/health" type="button">Health</button>
+                <button class="secondary debug-link" data-url="https://dashboard.render.com" type="button">Render</button>
+                <button class="secondary debug-link" data-url="https://cloud.mongodb.com" type="button">MongoDB</button>
+                <button class="secondary debug-link" data-url="https://dash.cloudflare.com" type="button">R2</button>
+            </section>
+            <div id="debug-filter-row">
+                <input id="debug-filter" placeholder="Filtr logów, np. Gateway albo MISS">
+                <button id="debug-scroll" class="secondary" type="button">Bottom</button>
+            </div>
+            <pre id="debug-log"></pre>
         </div>
-        <pre id="debug-log"></pre>
     </div>
     <script>
         (function () {
             var debug = new URLSearchParams(location.search).get('debug') === '1';
             var panel = document.getElementById('debug-console');
             var output = document.getElementById('debug-log');
+            var dragHandle = document.getElementById('debug-drag');
+            var minimize = document.getElementById('debug-minimize');
             var clear = document.getElementById('debug-clear');
             var pause = document.getElementById('debug-pause');
             var copy = document.getElementById('debug-copy');
@@ -334,6 +373,52 @@ const fallbackPlayHtml = () => `<!doctype html>
                 if (!paused) renderLog();
             }
             if (debug && panel) panel.style.display = 'block';
+            function openExternal(url) {
+                try {
+                    if (window.require) {
+                        window.require('electron').shell.openExternal(url);
+                        return;
+                    }
+                } catch (e) {}
+                window.open(url, '_blank');
+            }
+            Array.prototype.slice.call(document.querySelectorAll('.debug-link')).forEach(function (button) {
+                button.onclick = function () {
+                    openExternal(button.getAttribute('data-url'));
+                };
+            });
+            if (minimize) minimize.onclick = function (event) {
+                event.stopPropagation();
+                panel.classList.toggle('minimized');
+                minimize.textContent = panel.classList.contains('minimized') ? '+' : '_';
+            };
+            if (dragHandle && panel) {
+                var dragging = false;
+                var dragOffsetX = 0;
+                var dragOffsetY = 0;
+                dragHandle.addEventListener('mousedown', function (event) {
+                    if (event.target && event.target.tagName === 'BUTTON') return;
+                    dragging = true;
+                    var rect = panel.getBoundingClientRect();
+                    dragOffsetX = event.clientX - rect.left;
+                    dragOffsetY = event.clientY - rect.top;
+                    panel.style.left = rect.left + 'px';
+                    panel.style.top = rect.top + 'px';
+                    panel.style.right = 'auto';
+                    panel.style.bottom = 'auto';
+                    event.preventDefault();
+                });
+                window.addEventListener('mousemove', function (event) {
+                    if (!dragging) return;
+                    var nextLeft = Math.max(0, Math.min(window.innerWidth - panel.offsetWidth, event.clientX - dragOffsetX));
+                    var nextTop = Math.max(0, Math.min(window.innerHeight - panel.offsetHeight, event.clientY - dragOffsetY));
+                    panel.style.left = nextLeft + 'px';
+                    panel.style.top = nextTop + 'px';
+                });
+                window.addEventListener('mouseup', function () {
+                    dragging = false;
+                });
+            }
             ['log', 'warn', 'error'].forEach(function (level) {
                 var original = console[level];
                 console[level] = function () {
