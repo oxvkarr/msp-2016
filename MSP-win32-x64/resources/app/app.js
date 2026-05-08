@@ -21,6 +21,8 @@ const defaultRemoteAssetBaseUrl = 'https://pub-2ec8e3c2f0a24e46ab1defac06482eb3.
 const remoteAssetBaseUrl = (process.env.REMOTE_ASSET_BASE_URL || defaultRemoteAssetBaseUrl).replace(/\/+$/, '');
 const remoteGatewayUrl = (process.env.REMOTE_GATEWAY_URL || '').replace(/\/+$/, '');
 const isDebugMode = process.env.MSP_DEBUG === '1';
+const isServerOnly = process.env.MSP_SERVER_ONLY === '1' || process.argv.includes('--server');
+const configuredPort = process.env.PORT || process.env.MSP_PORT || '';
 const normalizeLocaleCode = (value) => {
     const parts = String(value || 'pl_PL').replace('-', '_').split('_');
     const language = (parts[0] || 'pl').toLowerCase();
@@ -1994,6 +1996,18 @@ app.get('/api/db/status', (req, res) => {
     });
 });
 
+app.get('/api/health', (req, res) => {
+    res.json({
+        ok: true,
+        mode: isServerOnly ? 'server' : 'local',
+        source: dbSource,
+        mongoConnected: Boolean(mongoClient && mongoDatabase),
+        remoteAssets: Boolean(remoteAssetBaseUrl),
+        locale: forcedLocale,
+        serverTime: new Date().toISOString()
+    });
+});
+
 app.use((req, res) => {
     log(`[MISS] ${req.method} ${req.url}`);
     res.status(404).type('text/plain').send(`Missing local file/route: ${req.url}`);
@@ -2012,6 +2026,14 @@ const startServer = (port) => {
 
 const start = async () => {
     db = await loadDb();
+    if (configuredPort) {
+        startServer(Number(configuredPort));
+        return;
+    }
+    if (isServerOnly) {
+        startServer(1600);
+        return;
+    }
     startServer(80);
     startServer(1600);
 };

@@ -53,6 +53,39 @@ REMOTE_GATEWAY_URL=https://your-server.example
 
 With this set, the local client still serves Flash/assets, but all `Gateway.aspx` AMF calls are proxied to your hosted backend. That hosted backend is the only place that should have `MONGODB_URI`.
 
+## Always-on backend
+
+To run the backend on a VPS or another always-on host, upload this `resources/app` folder, create `.env`, and run:
+
+```powershell
+npm install
+npm run start-server
+```
+
+Production `.env` for the hosted server:
+
+```env
+MSP_SERVER_ONLY=1
+PORT=1600
+MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@HOST/?appName=msp-2016
+MONGODB_DB=msp_2016
+MONGODB_STATE_COLLECTION=state
+REMOTE_ASSET_BASE_URL=https://pub-2ec8e3c2f0a24e46ab1defac06482eb3.r2.dev
+```
+
+If the host gives you its own port, keep `PORT` set to that value. You can check the backend with:
+
+```text
+https://your-server.example/api/health
+```
+
+Player clients should not contain `MONGODB_URI`. Give them only:
+
+```env
+REMOTE_GATEWAY_URL=https://your-server.example
+REMOTE_ASSET_BASE_URL=https://pub-2ec8e3c2f0a24e46ab1defac06482eb3.r2.dev
+```
+
 PowerShell example for local MongoDB without `.env`:
 
 ```powershell

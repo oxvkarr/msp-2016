@@ -4,6 +4,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "start-server": "node app.js --server",
     "start:debug": "electron . --debug",
     "make-launchers": "powershell -ExecutionPolicy Bypass -File ./tools/make-launchers.ps1",
     "upload-r2-assets": "node ./tools/upload-r2-assets.js"
