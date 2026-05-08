@@ -1205,18 +1205,18 @@ const facePart = (className, idField, id, swf, colors = '', regNewUser = REG_NEW
     initialAnimation: ''
 });
 
-const cloth = (id, swf, filename, slotTypeId, gender, colors = '') => {
+const cloth = (id, swf, filename, clothesCategoryId, gender, colors = '') => {
     const isFemale = gender === 'Female';
     const regNewUser = registerFlagForGender(gender);
     const slotType = typed('com.moviestarplanet.moviestar.valueObjects.SlotType', {
-        SlotTypeId: slotTypeId,
-        _SlotTypeId: slotTypeId
+        SlotTypeId: clothesCategoryId,
+        _SlotTypeId: clothesCategoryId
     });
     const clothesCategory = typed('com.moviestarplanet.moviestar.valueObjects.ClothesCategory', {
-        ClothesCategoryId: slotTypeId,
-        _ClothesCategoryId: slotTypeId,
-        SlotTypeId: slotTypeId,
-        _SlotTypeId: slotTypeId,
+        ClothesCategoryId: clothesCategoryId,
+        _ClothesCategoryId: clothesCategoryId,
+        SlotTypeId: clothesCategoryId,
+        _SlotTypeId: clothesCategoryId,
         SlotType: slotType,
         _SlotType: slotType
     });
@@ -1292,17 +1292,17 @@ const withCollectionAliases = (data) => {
 };
 
 const starterClothes = () => [
-    cloth(9001, 'swf/world/shopicons/hair.swf', 'hair.swf', 2, 'Female', '0x6b3b18,0x8a5522'),
-    cloth(9002, 'swf/world/shopicons/hair_male.swf', 'hair_male.swf', 2, 'Male', '0x6b3b18,0x8a5522'),
-    cloth(1001, 'swf/stuff/nickelodeon_spotlight_girlstop_fj.swf', 'nickelodeon_spotlight_girlstop_fj.swf', 3, 'Female', '0xff66aa,0xffffff'),
-    cloth(1002, 'swf/stuff/nickelodeon_spotlight_boystop_fj.swf', 'nickelodeon_spotlight_boystop_fj.swf', 3, 'Male', '0x3366cc,0xffffff'),
-    cloth(1003, 'swf/stuff/birthdaycampaign_2013_boystop_ms_mf.swf', 'birthdaycampaign_2013_boystop_ms_mf.swf', 3, 'Male', '0x1e63aa,0xffffff'),
-    cloth(1004, 'swf/stuff/cindarella whipped cream overwhelming disney dress.swf', 'cindarella whipped cream overwhelming disney dress.swf', 3, 'Female', '0xffffff,0xbfe8ff'),
-    cloth(1005, 'swf/stuff/nickelodeon_2015_maletopred_mf.swf', 'nickelodeon_2015_maletopred_mf.swf', 4, 'Male', '0xcc3333,0xffffff'),
-    cloth(9003, 'swf/world/shopicons/bottoms.swf', 'bottoms.swf', 4, 'Female', '0x2454a6,0xffffff'),
-    cloth(9004, 'swf/world/shopicons/bottoms_male.swf', 'bottoms_male.swf', 4, 'Male', '0x2454a6,0xffffff'),
-    cloth(9005, 'swf/world/shopicons/shoes.swf', 'shoes.swf', 5, 'Female', '0x222222,0xffffff'),
-    cloth(9006, 'swf/world/shopicons/shoes_male.swf', 'shoes_male.swf', 5, 'Male', '0x222222,0xffffff')
+    cloth(9001, 'swf/world/shopicons/hair.swf', 'hair.swf', 1, 'Female', '0x6b3b18,0x8a5522'),
+    cloth(9002, 'swf/world/shopicons/hair_male.swf', 'hair_male.swf', 1, 'Male', '0x6b3b18,0x8a5522'),
+    cloth(1001, 'swf/stuff/nickelodeon_spotlight_girlstop_fj.swf', 'nickelodeon_spotlight_girlstop_fj.swf', 2, 'Female', '0xff66aa,0xffffff'),
+    cloth(1002, 'swf/stuff/nickelodeon_spotlight_boystop_fj.swf', 'nickelodeon_spotlight_boystop_fj.swf', 2, 'Male', '0x3366cc,0xffffff'),
+    cloth(1003, 'swf/stuff/birthdaycampaign_2013_boystop_ms_mf.swf', 'birthdaycampaign_2013_boystop_ms_mf.swf', 2, 'Male', '0x1e63aa,0xffffff'),
+    cloth(1004, 'swf/stuff/cindarella whipped cream overwhelming disney dress.swf', 'cindarella whipped cream overwhelming disney dress.swf', 2, 'Female', '0xffffff,0xbfe8ff'),
+    cloth(1005, 'swf/stuff/nickelodeon_2015_maletopred_mf.swf', 'nickelodeon_2015_maletopred_mf.swf', 3, 'Male', '0xcc3333,0xffffff'),
+    cloth(9003, 'swf/world/shopicons/bottoms.swf', 'bottoms.swf', 3, 'Female', '0x2454a6,0xffffff'),
+    cloth(9004, 'swf/world/shopicons/bottoms_male.swf', 'bottoms_male.swf', 3, 'Male', '0x2454a6,0xffffff'),
+    cloth(9005, 'swf/world/shopicons/shoes.swf', 'shoes.swf', 10, 'Female', '0x222222,0xffffff'),
+    cloth(9006, 'swf/world/shopicons/shoes_male.swf', 'shoes_male.swf', 10, 'Male', '0x222222,0xffffff')
 ];
 
 const clothItem = (rel) => rel && (rel.Cloth || rel._Cloth || rel);
@@ -1350,10 +1350,10 @@ const defaultRegisterActor = (gender, rels) => {
 
 const registerNewUserData = () => {
     const rels = starterClothes();
-    const hairRels = relsBySlot(rels, 2);
-    const topRels = relsBySlot(rels, 3);
-    const bottomRels = relsBySlot(rels, 4);
-    const shoeRels = relsBySlot(rels, 5);
+    const hairRels = rels.filter((rel) => [1, 5].includes(relSlot(rel)));
+    const topRels = rels.filter((rel) => [2, 6, 7].includes(relSlot(rel)));
+    const bottomRels = rels.filter((rel) => [3, 8, 9, 60, 61].includes(relSlot(rel)));
+    const shoeRels = rels.filter((rel) => [10, 11, 12, 70, 71].includes(relSlot(rel)));
     return withCollectionAliases(typed('com.moviestarplanet.moviestar.valueObjects.RegisterNewUserData', {
     eyes: [
         facePart('com.moviestarplanet.moviestar.valueObjects.Eye', 'EyeId', 1, 'swf/dragonbone_faceparts/eyes/eyes_girlnextdoor_2013/texture.swf', '0x5b351c'),
