@@ -45,6 +45,26 @@ app.commandLine.appendSwitch('host-rules', localHostRules);
 
 let mainWindow;
 
+const waitForLocalServer = (attempts = 60) => new Promise((resolve) => {
+    const check = (left) => {
+        const req = require('http').get(`${LOCAL_BASE_URL}/play.html`, (res) => {
+            res.resume();
+            resolve(true);
+        });
+        req.on('error', () => {
+            if (left <= 1) {
+                resolve(false);
+                return;
+            }
+            setTimeout(() => check(left - 1), 250);
+        });
+        req.setTimeout(1000, () => {
+            req.destroy();
+        });
+    };
+    check(attempts);
+});
+
 const debugLog = (message) => {
     const line = `${new Date().toISOString()} ${message}`;
     console.log(message);
@@ -96,7 +116,7 @@ function redirectExternalMspRequests() {
     });
 }
 
-function createWindow() {
+async function createWindow() {
     redirectExternalMspRequests();
 
     mainWindow = new BrowserWindow({
@@ -128,6 +148,10 @@ function createWindow() {
         mainWindow.on('unresponsive', () => {
             debugLog('[WINDOW UNRESPONSIVE]');
         });
+    }
+    const ready = await waitForLocalServer();
+    if (!ready && isDebugMode) {
+        debugLog('[LOCAL SERVER] timed out waiting for /play.html');
     }
     mainWindow.loadURL(`http://127.0.0.1/play.html${isDebugMode ? '?debug=1' : ''}`);
 }
