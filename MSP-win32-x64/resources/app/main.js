@@ -5,6 +5,7 @@ const fs = require('fs');
 const flashPath = path.join(__dirname, 'pepflashplayer.dll');
 const debugLogPath = path.join(__dirname, 'msp-debug.log');
 const LOCAL_BASE_URL = 'http://127.0.0.1';
+const PLAY_PARAMS = 'country=pl&locale=pl_PL&language=pl&selectedLocale=pl_PL&server=pl&domain=pl';
 const exeName = path.basename(process.execPath || '').toLowerCase();
 const isDebugMode = process.argv.includes('--debug') || process.env.MSP_DEBUG === '1' || exeName.includes('debug');
 
@@ -79,6 +80,34 @@ const debugLog = (message) => {
     fs.appendFile(debugLogPath, `${line}\n`, () => {});
 };
 
+const removeIfExists = (targetPath) => {
+    try {
+        if (fs.existsSync(targetPath)) {
+            fs.rmSync(targetPath, { recursive: true, force: true });
+        }
+    } catch (err) {
+        if (isDebugMode) {
+            debugLog(`[CACHE CLEANUP FAIL] ${targetPath} ${err.message}`);
+        }
+    }
+};
+
+const clearLocalCaches = async () => {
+    await session.defaultSession.clearCache();
+    await session.defaultSession.clearStorageData();
+    removeIfExists(path.join(__dirname, 'asset-cache'));
+    removeIfExists(path.join(app.getPath('userData'), 'Cache'));
+    removeIfExists(path.join(app.getPath('userData'), 'GPUCache'));
+    removeIfExists(path.join(app.getPath('userData'), 'Local Storage'));
+    const flashBase = path.join(app.getPath('appData'), 'Macromedia', 'Flash Player');
+    removeIfExists(path.join(flashBase, '#SharedObjects'));
+    removeIfExists(path.join(flashBase, 'macromedia.com', 'support', 'flashplayer', 'sys', '#127.0.0.1'));
+    removeIfExists(path.join(flashBase, 'macromedia.com', 'support', 'flashplayer', 'sys', '#localhost'));
+    if (isDebugMode) {
+        debugLog('[CACHE] wyczyszczono cache Electron/Flash');
+    }
+};
+
 function redirectExternalMspRequests() {
     const filter = {
         urls: [
@@ -113,7 +142,11 @@ function redirectExternalMspRequests() {
                 return;
             }
 
-            const redirectURL = `${LOCAL_BASE_URL}${url.pathname}${url.search}`;
+            const publicHost = /(?:^|\.)moviestarplanet\.(?:com|co\.uk|de|fi|fr|pl|nl|no|se|dk|com\.tr|com\.au|co\.nz|ca|ie|es|it|br)$/i.test(url.hostname);
+            const isPolishHost = /(?:^|\.)moviestarplanet\.pl$/i.test(url.hostname);
+            const redirectURL = publicHost && !isPolishHost
+                ? `${LOCAL_BASE_URL}/server-unavailable.html`
+                : `${LOCAL_BASE_URL}${url.pathname}${url.search}`;
             if (isDebugMode) {
                 console.log(`[REDIRECT] ${details.url} -> ${redirectURL}`);
             }
@@ -126,6 +159,7 @@ function redirectExternalMspRequests() {
 
 async function createWindow() {
     redirectExternalMspRequests();
+    await clearLocalCaches();
 
     mainWindow = new BrowserWindow({
         width: 1200,
@@ -161,7 +195,7 @@ async function createWindow() {
     if (!ready && isDebugMode) {
         debugLog('[LOCAL SERVER] timed out waiting for /play.html');
     }
-    mainWindow.loadURL(`http://127.0.0.1/play.html${isDebugMode ? '?debug=1' : ''}`);
+    mainWindow.loadURL(`http://127.0.0.1/play.html?${PLAY_PARAMS}${isDebugMode ? '&debug=1' : ''}`);
 }
 
 app.on('ready', createWindow);

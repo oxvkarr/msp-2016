@@ -39,6 +39,8 @@ const normalizeLocaleCode = (value) => {
 };
 const forcedLocale = normalizeLocaleCode(process.env.MSP_LOCALE || 'pl_PL');
 const forcedLocalePath = forcedLocale.toLowerCase();
+const startupParams = 'country=pl&locale=pl_PL&language=pl&selectedLocale=pl_PL&server=pl&domain=pl';
+const flashVars = `${startupParams}&resourceModuleUrl=swf/locales/${forcedLocalePath}_resourcemodule.swf?v=Main_20161102_160430&swfVer=Main_20161102_160430&translationsVersion=2016112_16431`;
 let mongoClient = null;
 let mongoDatabase = null;
 let dbSource = 'json';
@@ -258,13 +260,13 @@ const fallbackPlayHtml = () => `<!doctype html>
     </style>
 </head>
 <body>
-    <object id="msp" type="application/x-shockwave-flash" data="/Main_20161102_160430.swf">
-        <param name="movie" value="/Main_20161102_160430.swf">
+    <object id="msp" type="application/x-shockwave-flash" data="/Main_20161102_160430.swf?${startupParams}">
+        <param name="movie" value="/Main_20161102_160430.swf?${startupParams}">
         <param name="allowScriptAccess" value="always">
         <param name="allowFullScreen" value="true">
         <param name="wmode" value="direct">
-        <param name="flashvars" value="country=pl&locale=pl_PL&language=pl&selectedLocale=pl_PL&resourceModuleUrl=swf/locales/${forcedLocalePath}_resourcemodule.swf?v=Main_20161102_160430&swfVer=Main_20161102_160430&translationsVersion=2016112_16431">
-        <embed src="/Main_20161102_160430.swf" allowScriptAccess="always" allowFullScreen="true" wmode="direct" flashvars="country=pl&locale=pl_PL&language=pl&selectedLocale=pl_PL&resourceModuleUrl=swf/locales/${forcedLocalePath}_resourcemodule.swf?v=Main_20161102_160430&swfVer=Main_20161102_160430&translationsVersion=2016112_16431">
+        <param name="flashvars" value="${flashVars}">
+        <embed src="/Main_20161102_160430.swf?${startupParams}" allowScriptAccess="always" allowFullScreen="true" wmode="direct" flashvars="${flashVars}">
     </object>
     <div id="debug-console">
         <header id="debug-drag">
@@ -501,6 +503,11 @@ const fallbackPlayHtml = () => `<!doctype html>
 </html>`;
 
 const sendPlayHtml = (req, res) => {
+    if (req.path === '/play.html' && !req.query.country) {
+        const debug = req.query.debug === '1' ? '&debug=1' : '';
+        res.redirect(302, `/play.html?${startupParams}${debug}`);
+        return;
+    }
     const filePath = path.join(publicPath, 'play.html');
     if (fs.existsSync(filePath)) {
         res.sendFile(filePath);
