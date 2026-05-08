@@ -33,6 +33,7 @@ let mongoClient = null;
 let mongoDatabase = null;
 let dbSource = 'json';
 const recentLogs = [];
+const isDebugLogRequest = (req) => req.path === '/api/debug/logs';
 const log = (message) => {
     const line = `${new Date().toISOString()} ${message}`;
     recentLogs.push(line);
@@ -48,7 +49,9 @@ const log = (message) => {
 app.use(express.raw({ type: '*/*', limit: '50mb' }));
 
 app.use((req, res, next) => {
-    log(`[REQ] ${req.method} ${req.url} host=${req.headers.host || ''}`);
+    if (!isDebugLogRequest(req)) {
+        log(`[REQ] ${req.method} ${req.url} host=${req.headers.host || ''}`);
+    }
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Headers", "*");
     next();
@@ -413,13 +416,27 @@ app.get('/:client(MSPWeb|MSPMobile)/:locale/myResources.txt', async (req, res) =
     res.status(404).type('text/plain').send(`Missing translation: ${req.url}`);
 });
 
+app.get('/api/debug/logs', (req, res) => {
+    if (!isDebugMode) {
+        res.status(404).json({ error: 'debug disabled' });
+        return;
+    }
+    const since = Math.max(0, Number(req.query.since) || 0);
+    res.json({
+        next: recentLogs.length,
+        lines: recentLogs.slice(since)
+    });
+});
+
 app.use(express.static(publicPath));
 
 app.get('*', async (req, res, next) => {
     if (await serveRemoteAsset(req, res, req.path.replace(/^\/+/, ''))) {
         return;
     }
-    log(`[REMOTE ASSET MISS] ${req.url}`);
+    if (!req.path.startsWith('/api/')) {
+        log(`[REMOTE ASSET MISS] ${req.url}`);
+    }
     next();
 });
 
@@ -1768,19 +1785,6 @@ app.get('/api/db/status', (req, res) => {
         users: Array.isArray(db.users) ? db.users.length : 0
     });
 });
-
-app.get('/api/debug/logs', (req, res) => {
-    if (!isDebugMode) {
-        res.status(404).json({ error: 'debug disabled' });
-        return;
-    }
-    const since = Math.max(0, Number(req.query.since) || 0);
-    res.json({
-        next: recentLogs.length,
-        lines: recentLogs.slice(since)
-    });
-});
-
 
 app.use((req, res) => {
     log(`[MISS] ${req.method} ${req.url}`);
