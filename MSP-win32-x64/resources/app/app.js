@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { Writable } = require('stream');
 const amfjs = require('amfjs');
 const { MongoClient } = require('mongodb');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const app = express();
 
 const publicPath = path.join(__dirname, 'public');
