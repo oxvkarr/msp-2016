@@ -24,6 +24,7 @@ const remoteAssetBaseUrl = (process.env.REMOTE_ASSET_BASE_URL || defaultRemoteAs
 const remoteGatewayUrl = (process.env.REMOTE_GATEWAY_URL || defaultRemoteGatewayUrl).replace(/\/+$/, '');
 const isDebugMode = process.env.MSP_DEBUG === '1';
 const isServerOnly = process.env.MSP_SERVER_ONLY === '1' || process.argv.includes('--server');
+const useRemoteGateway = Boolean(remoteGatewayUrl) && !isServerOnly;
 const configuredPort = process.env.PORT || process.env.MSP_PORT || '';
 const normalizeLocaleCode = (value) => {
     const parts = String(value || 'pl_PL').replace('-', '_').split('_');
@@ -375,8 +376,8 @@ const fallbackPlayHtml = () => `<!doctype html>
                     fetch('/api/db/status')
                         .then(function (response) { return response.json(); })
                         .then(function (data) {
-                            setText(dbStat, data.mongoConnected ? 'MongoDB' : data.source);
-                            setLight('db', data.mongoConnected ? 'good' : 'warn', data.mongoConnected ? 'Baza' : 'JSON');
+                            setText(dbStat, data.source === 'remote' ? 'Render' : (data.mongoConnected ? 'MongoDB' : data.source));
+                            setLight('db', data.mongoConnected ? 'good' : 'warn', data.source === 'remote' ? 'Render' : (data.mongoConnected ? 'Baza' : 'JSON'));
                         })
                         .catch(function () {
                             setText(dbStat, 'offline');
@@ -1600,6 +1601,11 @@ const loadMongoDb = async () => {
 };
 
 const loadDb = async () => {
+    if (useRemoteGateway) {
+        dbSource = 'remote';
+        log(`[DB] Uzywam zdalnej bramy: ${remoteGatewayUrl}`);
+        return loadJsonDb();
+    }
     const mongoState = await loadMongoDb();
     if (mongoState) return mongoState;
     return loadJsonDb();
@@ -1990,7 +1996,8 @@ app.get('/getConfig', (req, res) => {
 app.get('/api/db/status', (req, res) => {
     res.json({
         source: dbSource,
-        mongoConnected: Boolean(mongoClient && mongoDatabase),
+        mongoConnected: useRemoteGateway || Boolean(mongoClient && mongoDatabase),
+        remoteGateway: useRemoteGateway ? remoteGatewayUrl : '',
         mongoDbName,
         mongoStateCollection,
         clothes: db.catalog && Array.isArray(db.catalog.clothes) ? db.catalog.clothes.length : 0,
@@ -2003,7 +2010,8 @@ app.get('/api/health', (req, res) => {
         ok: true,
         mode: isServerOnly ? 'server' : 'local',
         source: dbSource,
-        mongoConnected: Boolean(mongoClient && mongoDatabase),
+        mongoConnected: useRemoteGateway || Boolean(mongoClient && mongoDatabase),
+        remoteGateway: useRemoteGateway ? remoteGatewayUrl : '',
         remoteAssets: Boolean(remoteAssetBaseUrl),
         locale: forcedLocale,
         serverTime: new Date().toISOString()
