@@ -3,3 +3,4 @@ node_modules/
 msp-debug.log
 .env
 asset-cache/
+.wrangler/

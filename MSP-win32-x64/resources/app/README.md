@@ -75,6 +75,26 @@ REMOTE_ASSET_BASE_URL=https://your-domain.example/msp-assets
 
 This lets release builds stay smaller: keep only the boot files locally, host the larger `swf`, `img`, `sounds`, and dictionary assets on your asset server, and let the client cache them when needed.
 
+## Upload assets to R2
+
+For large folders, use the S3-compatible uploader instead of the Cloudflare dashboard.
+
+In Cloudflare, open `R2 Object Storage` overview, then find `Manage R2 API tokens` or `S3 API`, create a token with `Object Read & Write` for the `msp-assets` bucket, and copy the values into `.env`:
+
+```env
+CLOUDFLARE_ACCOUNT_ID=your_account_id
+R2_BUCKET=msp-assets
+R2_ACCESS_KEY_ID=your_access_key_id
+R2_SECRET_ACCESS_KEY=your_secret_access_key
+R2_UPLOAD_CONCURRENCY=24
+```
+
+Then upload:
+
+```powershell
+npm run upload-r2-assets
+```
+
 ## Build for Windows
 `npm run build-windows`
 
