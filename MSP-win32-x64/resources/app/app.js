@@ -168,6 +168,27 @@ const fallbackPlayHtml = () => `<!doctype html>
             };
             if (clear) clear.onclick = function () { output.textContent = ''; };
             console.log('Fallback play.html loaded');
+            if (debug) {
+                var serverLogCursor = 0;
+                var pollServerLogs = function () {
+                    fetch('/api/debug/logs?since=' + serverLogCursor)
+                        .then(function (response) {
+                            if (!response.ok) throw new Error('HTTP ' + response.status);
+                            return response.json();
+                        })
+                        .then(function (data) {
+                            serverLogCursor = data.next || serverLogCursor;
+                            (data.lines || []).forEach(function (line) {
+                                write('SERVER', [line.replace(/^\\d{4}-\\d{2}-\\d{2}T[^ ]+ /, '')]);
+                            });
+                        })
+                        .catch(function (error) {
+                            write('SERVER', ['debug logs unavailable: ' + error.message]);
+                        });
+                };
+                pollServerLogs();
+                setInterval(pollServerLogs, 1000);
+            }
         }());
     </script>
 </body>
