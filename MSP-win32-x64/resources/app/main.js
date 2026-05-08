@@ -45,7 +45,7 @@ app.commandLine.appendSwitch('host-rules', localHostRules);
 
 let mainWindow;
 
-const waitForLocalServer = (attempts = 60) => new Promise((resolve) => {
+const waitForLocalServer = (attempts = 300) => new Promise((resolve) => {
     const check = (left) => {
         const req = require('http').get(`${LOCAL_BASE_URL}/play.html`, (res) => {
             res.resume();

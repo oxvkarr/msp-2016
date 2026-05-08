@@ -22,6 +22,7 @@ const defaultRemoteAssetBaseUrl = 'https://pub-2ec8e3c2f0a24e46ab1defac06482eb3.
 const defaultRemoteGatewayUrl = 'https://msp-2016.onrender.com';
 const remoteAssetBaseUrl = (process.env.REMOTE_ASSET_BASE_URL || defaultRemoteAssetBaseUrl).replace(/\/+$/, '');
 const remoteGatewayUrl = (process.env.REMOTE_GATEWAY_URL || defaultRemoteGatewayUrl).replace(/\/+$/, '');
+const remoteGatewayTimeoutMs = Number(process.env.REMOTE_GATEWAY_TIMEOUT_MS || 60000);
 const isDebugMode = process.env.MSP_DEBUG === '1';
 const isServerOnly = process.env.MSP_SERVER_ONLY === '1' || process.argv.includes('--server');
 const useRemoteGateway = Boolean(remoteGatewayUrl) && !isServerOnly;
@@ -347,7 +348,7 @@ const fallbackPlayHtml = () => `<!doctype html>
             }
             function updateStats(line) {
                 if (line.indexOf('[REQ]') !== -1) counters.req += 1;
-                if (line.indexOf('[AMF]') !== -1) counters.amf += 1;
+                if (line.indexOf('[AMF]') !== -1 || line.indexOf('[REMOTE GATEWAY]') !== -1) counters.amf += 1;
                 if (line.indexOf('[REMOTE ASSET]') !== -1 || line.indexOf('[LOOKDATA]') !== -1 || line.indexOf('[TRANSLATION]') !== -1) counters.assets += 1;
                 setText(reqStat, String(counters.req));
                 setText(amfStat, String(counters.amf));
@@ -357,8 +358,8 @@ const fallbackPlayHtml = () => `<!doctype html>
                 if (line.indexOf('[REMOTE ASSET TRY MISS]') !== -1 || line.indexOf('[REMOTE ASSET MISS]') !== -1 || line.indexOf('[MISS]') !== -1) setLight('assets', 'warn', 'Pliki');
                 if (line.indexOf('[TRANSLATION]') !== -1 || line.indexOf('pl_pl_resourcemodule') !== -1) setLight('locale', 'good', 'PL');
                 if (line.indexOf('[TRANSLATION MISS]') !== -1 || line.indexOf('MISSING_LOCALE') !== -1) setLight('locale', 'bad', 'PL');
-                if (line.indexOf('[AMF RESPONSE]') !== -1) setLight('amf', 'good', 'AMF');
-                if (line.indexOf('[AMF ERROR]') !== -1 || line.indexOf('[AMF DECODE MISS]') !== -1) setLight('amf', 'warn', 'AMF');
+                if (line.indexOf('[AMF RESPONSE]') !== -1 || line.indexOf('[REMOTE GATEWAY]') !== -1) setLight('amf', 'good', 'AMF');
+                if (line.indexOf('[AMF ERROR]') !== -1 || line.indexOf('[AMF DECODE MISS]') !== -1 || line.indexOf('[REMOTE GATEWAY FAIL]') !== -1) setLight('amf', 'warn', 'AMF');
             }
             function write(level, args) {
                 if (!debug || !output) return;
@@ -584,7 +585,7 @@ const proxyGatewayRequest = (req, res, method) => {
             'content-type': req.headers['content-type'] || 'application/x-amf',
             'content-length': body.length
         },
-        timeout: 20000
+        timeout: remoteGatewayTimeoutMs
     }, (proxyRes) => {
         res.status(proxyRes.statusCode || 502);
         res.set('Content-Type', proxyRes.headers['content-type'] || 'application/x-amf');
@@ -602,6 +603,34 @@ const proxyGatewayRequest = (req, res, method) => {
     log(`[REMOTE GATEWAY] ${method || ''} -> ${targetUrl.toString()}`);
     return true;
 };
+
+const warmRemoteGateway = () => new Promise((resolve) => {
+    if (!useRemoteGateway) {
+        resolve(false);
+        return;
+    }
+
+    const healthUrl = new URL(`${remoteGatewayUrl}/api/health`);
+    const client = healthUrl.protocol === 'https:' ? https : http;
+    log(`[REMOTE GATEWAY WARMUP] ${healthUrl.toString()}`);
+    const request = client.get(healthUrl, { timeout: remoteGatewayTimeoutMs }, (response) => {
+        response.resume();
+        if (response.statusCode >= 200 && response.statusCode < 400) {
+            log(`[REMOTE GATEWAY READY] ${healthUrl.toString()} status=${response.statusCode}`);
+            resolve(true);
+            return;
+        }
+        log(`[REMOTE GATEWAY WARMUP MISS] ${healthUrl.toString()} status=${response.statusCode}`);
+        resolve(false);
+    });
+    request.on('error', (err) => {
+        log(`[REMOTE GATEWAY WARMUP FAIL] ${healthUrl.toString()} ${err.message}`);
+        resolve(false);
+    });
+    request.on('timeout', () => {
+        request.destroy(new Error('Remote gateway warmup timeout'));
+    });
+});
 
 const serveRemoteAsset = async (req, res, cleanPath) => {
     if (!remoteAssetBaseUrl || !remoteAssetExtensions.has(path.extname(cleanPath).toLowerCase())) {
@@ -2152,6 +2181,7 @@ process.on('SIGTERM', () => {
 
 const start = async () => {
     db = await loadDb();
+    await warmRemoteGateway();
     writeServerPid();
     if (configuredPort) {
         startServer(Number(configuredPort));
