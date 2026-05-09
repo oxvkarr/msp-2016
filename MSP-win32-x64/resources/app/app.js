@@ -2054,7 +2054,6 @@ const loginStatus = (actorRecord = null) => makeLoginStatus('com.moviestarplanet
 const serviceLoginStatus = (actorRecord = null) => {
     const status = makeLoginStatus('com.moviestarplanet.services.userservice.valueObjects.LoginStatus', servicePostLoginSequence(), actorRecord);
     status.lbse = status.lbs;
-    delete status.lbs;
     status.mutedUntil = null;
     status.helpMessage = '';
     status.amsHash = '';
