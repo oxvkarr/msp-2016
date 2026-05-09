@@ -1833,7 +1833,7 @@ const serviceLoginStatus = (actorRecord = null) => {
     return status;
 };
 
-const webLoginStatus = (actorRecord = null) => loginStatus(actorRecord);
+const webLoginStatus = (actorRecord = null) => loginStatus2(actorRecord);
 
 const loginHash = (status) => {
     const actor = status.actor || {};
@@ -1852,12 +1852,11 @@ const loginHash = (status) => {
 
 const loginStatus2 = (actorRecord = null) => {
     const status = serviceLoginStatus(actorRecord);
-    const hash = loginHash(status);
+    loginHash(status);
     const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
     return {
         loginStatus: status,
-        hDetails,
-        hash
+        hDetails
     };
 };
 
@@ -1865,12 +1864,11 @@ const invalidLoginStatus2 = () => {
     const status = serviceLoginStatus();
     status.status = 'InvalidCredentials';
     status.statusDetails = '';
-    const hash = loginHash(status);
+    loginHash(status);
     const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
     return {
         loginStatus: status,
-        hDetails,
-        hash
+        hDetails
     };
 };
 
@@ -2479,7 +2477,8 @@ const genericWriteResult = (method, leaf) => {
 };
 
 const shouldUseAmf3 = (method, result) => {
-    if (method.endsWith('Login') || method.endsWith('Login2')) return false;
+    if (method.endsWith('Login')) return true;
+    if (method.endsWith('Login2')) return false;
     if (method.endsWith('GetAppSettings')) return true;
     if (result && typeof result === 'object' && result.__class) return true;
     return /Login|LoadDataForRegisterNewUser|LoadActorDetails|UserSession|UserService|MovieStar|Shopping|Shop|Spending|Profile|Friend|Movie|Look|News|Quest|Gift|Admin|Payment|Messaging|Room|Inventory|Wardrobe|Logging/i.test(method);
@@ -2520,7 +2519,7 @@ const getAmfResultForMethod = async (method, args = []) => {
     }
     if (method.endsWith('Login')) {
         const actor = actorForLoginArgs(args);
-        return actor ? webLoginStatus(actor) : invalidLoginStatus();
+        return actor ? webLoginStatus(actor) : invalidLoginStatus2();
     }
     if (method.endsWith('CreateNewUser') || method.endsWith('CreateNewUserOld')) {
         return createAccountFromArgs(args);
