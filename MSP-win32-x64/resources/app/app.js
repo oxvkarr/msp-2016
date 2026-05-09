@@ -1788,6 +1788,93 @@ const createNewUserError = (message, errorCode = 1) => typed('com.moviestarplane
     Message: message
 });
 
+const APP_SETTING_ALIAS = 'MovieStarPlanet.WebService.User.UserService+AppSetting';
+const appSettingDefaults = {
+    SuperVIPDisabled: 'false',
+    ImageUpload: 'true',
+    ImageUploadLevelRequired: '0',
+    ImageUploadAgeRestriction: '0',
+    TextSearchMinLength: '1',
+    SeasonalSale: 'false',
+    XmppUseLocalhost: 'true',
+    ReleaseVersion: '20161102_160430',
+    BooniePlanetURL: '',
+    RoboBlastPlanetURL: '',
+    ExternalAppLinksLevelRequired: '999',
+    MessageServiceELB: 'false',
+    SendMessagesToCassandraDatabase: 'false',
+    XmppConferenceServerUrl: '',
+    UseOldMessagesList: 'true',
+    usejsonc: 'false',
+    SchoolFriendsSwitchEnabled: 'false',
+    MySchoolFirstNameEnabled: 'false',
+    EcoSystemUrl: '',
+    EcosystemUrl: '',
+    XmppServerUrl: '',
+    XMPPFeatureState: 'false',
+    specialinputtextchars: '',
+    AllowedNonFriendCommunication: 'true',
+    showoffercountdown: 'false',
+    youtubeapikey: '',
+    MessageServerUrl: '',
+    vipsale: 'false',
+    DeviceFingerprintCollectionEnabled: 'false',
+    MangroveAnalyticsSwitch: 'false',
+    MangroveAnalyticsCollectorURL: '',
+    MangroveAnalyticsBufferSize: '5',
+    MangroveAnalyticsDisabledEvents: '',
+    MangroveAnalyticsDisableBase64: 'true',
+    MangroveAnalyticsFeatureUsageMinTime: '0',
+    HelpCenterLink: 'http://127.0.0.1/',
+    SafetyHelplineLink: 'http://127.0.0.1/',
+    SafetyRulesLink: 'http://127.0.0.1/',
+    ModerationCheckUpdateTimerSeconds: '300',
+    enableClientExceptionLogging: 'false',
+    giftcertificateenabled: 'false',
+    EnableSpecialOffers: 'false',
+    PhotoUploadOnWeb: 'false',
+    mobileversion_amazonstore: '',
+    mobileversion_googleplay: '',
+    mobileversion_appstore: '',
+    YoutubeKindle: 'false',
+    YoutubeIos: 'false',
+    YoutubeAndroid: 'false',
+    clientidletimeout: '3600',
+    ServerType: 'local',
+    MaxConcurrentLoads: '10',
+    MaxConcurrentAmfCalls: '10',
+    SnapshotServerUrl: '',
+    SnapshotServiceHostName: '',
+    PerformanceTracker: 'false',
+    UseRemoting: 'true',
+    SwrveEnabled: 'false',
+    UseUserBehaviorService: 'false',
+    UseUserNameFiltering: 'false',
+    UserBehaviorServiceHostName: '',
+    chatFMSServer: '',
+    chatGameFMSServer: '',
+    CommFMSServer: '',
+    BlobServiceHostName: '',
+    PurchaseFlow: 'local',
+    ShowSIDLogo: 'true',
+    ShowCEOPLogo: 'true',
+    showwebshoplink: 'false',
+    MalesMustWearTops: 'false',
+    ChristmasStartDate: '',
+    arcadegamesurl: '',
+    testFMSServer: ''
+};
+
+const appSettingValue = (name) => Object.prototype.hasOwnProperty.call(appSettingDefaults, name) ? appSettingDefaults[name] : '';
+const appSetting = (name) => typed(APP_SETTING_ALIAS, {
+    name,
+    value: String(appSettingValue(name))
+});
+const appSettingsForKeys = (keys = []) => {
+    const requested = Array.isArray(keys) && keys.length > 0 ? keys : Object.keys(appSettingDefaults);
+    return requested.map((name) => appSetting(String(name)));
+};
+
 const createAccountFromArgs = async (args = []) => {
     const { username, password } = credentialsFromArgs(args);
     const cleanUsername = String(username || '').trim();
@@ -2254,6 +2341,7 @@ const genericWriteResult = (method, leaf) => {
 
 const shouldUseAmf3 = (method, result) => {
     if (method.endsWith('Login') || method.endsWith('Login2')) return false;
+    if (method.endsWith('GetAppSettings')) return true;
     if (result && typeof result === 'object' && result.__class) return true;
     return /Login|LoadDataForRegisterNewUser|LoadActorDetails|UserSession|UserService|MovieStar|Shopping|Shop|Spending|Profile|Friend|Movie|Look|News|Quest|Gift|Admin|Payment|Messaging|Room|Inventory|Wardrobe|Logging/i.test(method);
 };
@@ -2261,15 +2349,12 @@ const shouldUseAmf3 = (method, result) => {
 const getAmfResultForMethod = async (method, args = []) => {
     const leaf = methodLeaf(method);
     if (method.endsWith('GetAppSettings')) {
-        return {
-            Success: true,
-            ServerTime: new Date().toISOString(),
-            Language: 'pl_PL',
-            Country: 'pl',
-            CdnBasePath: 'http://127.0.0.1/',
-            CdnLocalBasePath: 'http://127.0.0.1/',
-            WebServerPath: 'http://127.0.0.1/'
-        };
+        const requestedKeys = Array.isArray(args[1]) ? args[1] : (Array.isArray(args[0]) ? args[0] : []);
+        return appSettingsForKeys(requestedKeys);
+    }
+    if (method.endsWith('GetAppSetting')) {
+        const name = args.find((arg) => typeof arg === 'string') || '';
+        return String(appSettingValue(name));
     }
     if (method.endsWith('GetCurrentPaymentPossibilities')) {
         return [];
