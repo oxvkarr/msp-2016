@@ -2069,7 +2069,9 @@ const loginHash = (status) => {
         actor.Level
     ].map((value) => value === undefined || value === null ? '' : String(value));
     log(`[LOGIN HASH VALUES] ${values.join('|')}`);
-    return crypto.createHash('md5').update(`idu!2*;d${values.join('')}`, 'utf8').digest('hex');
+    const hash = crypto.createHash('md5').update(`${values.join('')}idu!2*;d`, 'utf8').digest('hex');
+    log(`[LOGIN HASH] ${hash}`);
+    return hash;
 };
 
 const loginStatus2 = (actorRecord = null, useServiceTypes = false) => {
