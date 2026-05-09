@@ -1763,7 +1763,8 @@ const loginActorPersonalInfo = () => typed('MovieStarPlanet.DBML.ActorPersonalIn
 
 const loginActorDetails = (actorRecord = null) => {
     const actor = actorDefaults(actorRecord);
-    return typed('MovieStarPlanet.DBML.ActorDetails', {
+    const details = devActorDetails(actorRecord);
+    return Object.assign(details, {
     ActorId: actor.actorId,
     Name: actor.name,
     Level: actor.level,
@@ -1832,7 +1833,7 @@ const loginActorDetails = (actorRecord = null) => {
     Diamonds: actor.diamonds,
     PopUpStyleId: 0,
     BoyFriend: null,
-    ActorPersonalInfo: loginActorPersonalInfo(),
+    ActorPersonalInfo: details.ActorPersonalInfo,
     ActorRelationships: []
 });
 };
