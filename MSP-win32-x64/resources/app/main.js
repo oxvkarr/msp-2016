@@ -8,6 +8,8 @@ const LOCAL_BASE_URL = 'http://127.0.0.1';
 const PLAY_PARAMS = 'country=pl&locale=pl_PL&language=pl&selectedLocale=pl_PL&server=pl&domain=pl';
 const exeName = path.basename(process.execPath || '').toLowerCase();
 const isDebugMode = process.argv.includes('--debug') || process.env.MSP_DEBUG === '1' || exeName.includes('debug');
+const useFiddlerProxy = process.argv.includes('--fiddler') || process.env.MSP_FIDDLER === '1' || exeName.includes('fiddler');
+const fiddlerProxy = process.env.MSP_FIDDLER_PROXY || '127.0.0.1:8888';
 
 process.env.MSP_DEBUG = isDebugMode ? '1' : '0';
 require('./app');
@@ -43,6 +45,10 @@ app.commandLine.appendSwitch('disable-web-security');
 app.commandLine.appendSwitch('ignore-certificate-errors');
 app.commandLine.appendSwitch('allow-running-insecure-content');
 app.commandLine.appendSwitch('host-rules', localHostRules);
+if (useFiddlerProxy) {
+    app.commandLine.appendSwitch('proxy-server', `http://${fiddlerProxy}`);
+    app.commandLine.appendSwitch('proxy-bypass-list', '<-loopback>');
+}
 
 let mainWindow;
 
@@ -105,6 +111,9 @@ const clearLocalCaches = async () => {
     removeIfExists(path.join(flashBase, 'macromedia.com', 'support', 'flashplayer', 'sys', '#localhost'));
     if (isDebugMode) {
         debugLog('[CACHE] wyczyszczono cache Electron/Flash');
+        if (useFiddlerProxy) {
+            debugLog(`[FIDDLER] proxy wlaczony: ${fiddlerProxy}`);
+        }
     }
 };
 
