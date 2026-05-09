@@ -2042,7 +2042,7 @@ const serviceLoginStatus = (actorRecord = null) => {
     return makeLoginStatus('com.moviestarplanet.services.userservice.valueObjects.LoginStatus', servicePostLoginSequence(), actorRecord);
 };
 
-const webLoginStatus = (actorRecord = null) => loginStatus2(actorRecord);
+const webLoginStatus = (actorRecord = null) => loginStatus2(actorRecord, true);
 
 const loginHash = (status) => {
     const actor = status.actor || {};
@@ -2059,26 +2059,26 @@ const loginHash = (status) => {
     return crypto.createHash('md5').update(`idu!2*;d${values.join('')}`, 'utf8').digest('hex');
 };
 
-const loginStatus2 = (actorRecord = null) => {
-    const status = loginStatus(actorRecord);
+const loginStatus2 = (actorRecord = null, useServiceTypes = false) => {
+    const status = useServiceTypes ? serviceLoginStatus(actorRecord) : loginStatus(actorRecord);
     const hash = loginHash(status);
     const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
-    return typed('com.moviestarplanet.valueObjects.LoginStatus2', {
+    return typed(useServiceTypes ? 'com.moviestarplanet.services.userservice.valueObjects.LoginStatus2' : 'com.moviestarplanet.valueObjects.LoginStatus2', {
         loginStatus: status,
         hDetails,
         hash
     });
 };
 
-const invalidLoginStatus2 = () => {
-    const status = loginStatus();
+const invalidLoginStatus2 = (useServiceTypes = false) => {
+    const status = useServiceTypes ? serviceLoginStatus() : loginStatus();
     status.status = 'InvalidCredentials';
     status.statusDetails = '';
     status.actor = null;
     status.actorLocale = [];
     status.lbs = [];
     status.ticket = '';
-    return typed('com.moviestarplanet.valueObjects.LoginStatus2', {
+    return typed(useServiceTypes ? 'com.moviestarplanet.services.userservice.valueObjects.LoginStatus2' : 'com.moviestarplanet.valueObjects.LoginStatus2', {
         loginStatus: status,
         hDetails: '',
         hash: ''
@@ -2729,11 +2729,11 @@ const getAmfResultForMethod = async (method, args = []) => {
     }
     if (method.endsWith('Login2')) {
         const actor = actorForLoginArgs(args);
-        return actor ? loginStatus2(actor) : invalidLoginStatus2();
+        return actor ? loginStatus2(actor, true) : invalidLoginStatus2(true);
     }
     if (method.endsWith('Login')) {
         const actor = actorForLoginArgs(args);
-        return actor ? webLoginStatus(actor) : invalidLoginStatus2();
+        return actor ? webLoginStatus(actor) : invalidLoginStatus2(true);
     }
     if (method.endsWith('CreateNewUser') || method.endsWith('CreateNewUserOld')) {
         return createAccountFromArgs(args);
