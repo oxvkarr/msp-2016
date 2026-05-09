@@ -1724,6 +1724,21 @@ const clothItem = (rel) => rel && (rel.Cloth || rel._Cloth || rel);
 
 const clothItems = (rels) => rels.map(clothItem).filter(Boolean);
 
+const loginActorClothesRels = () => starterClothes().slice(0, 6).map((rel) => typed('com.moviestarplanet.moviestar.valueObjects.ActorClothesRel', {
+    ActorClothesRelId: rel.ActorClothesRelId,
+    _ActorClothesRelId: rel._ActorClothesRelId,
+    ClothesId: rel.ClothesId,
+    _ClothesId: rel._ClothesId,
+    Color: rel.Color,
+    _Color: rel._Color,
+    IsWearing: rel.IsWearing,
+    _IsWearing: rel._IsWearing,
+    x: rel.x,
+    _x: rel._x,
+    y: rel.y,
+    _y: rel._y
+}));
+
 const relSlot = (rel) => {
     const item = clothItem(rel);
     const category = item && (item.ClothesCategory || item._ClothesCategory);
@@ -1828,8 +1843,9 @@ const actorDefaults = (actorRecord = {}) => {
 };
 };
 
-const devActorDetails = (actorRecord = null) => {
+const devActorDetails = (actorRecord = null, includeClothDetails = true) => {
     const actor = actorDefaults(actorRecord);
+    const actorClothesRels = includeClothDetails ? starterClothes().slice(0, 6) : loginActorClothesRels();
     return typed('com.moviestarplanet.usersession.valueobjects.ActorDetails', {
     ActorId: actor.actorId,
     Name: actor.name,
@@ -1890,10 +1906,10 @@ const devActorDetails = (actorRecord = null) => {
     Diamonds: actor.diamonds,
     PopUpStyleId: 0,
     BoyFriend: null,
-    ActorClothesRels: starterClothes().slice(0, 6),
-    _ActorClothesRels: starterClothes().slice(0, 6),
-    ActorClothesRels2: starterClothes().slice(0, 6),
-    _ActorClothesRels2: starterClothes().slice(0, 6),
+    ActorClothesRels: actorClothesRels,
+    _ActorClothesRels: actorClothesRels,
+    ActorClothesRels2: actorClothesRels,
+    _ActorClothesRels2: actorClothesRels,
     Animations: [{
         ActorAnimationRelId: 1,
         AnimationId: 1,
@@ -2019,7 +2035,7 @@ const loginActorDetails = (actorRecord = null) => {
 
 const makeLoginStatus = (className, postLoginSeq = postLoginSequence(), actorRecord = null) => typed(className, {
     status: 'Success',
-    actor: devActorDetails(actorRecord),
+    actor: devActorDetails(actorRecord, false),
     statusDetails: '',
     actorLocale: [],
     lbs: [],
