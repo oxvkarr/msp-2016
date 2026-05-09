@@ -310,6 +310,34 @@ const fallbackPlayHtml = () => `<!doctype html>
     </div>
     <script>
         (function () {
+            var noop = function () { return null; };
+            [
+                'trackLogin',
+                'trackCreateNewUser',
+                'trackPurchaseVIP',
+                'trackBuildingCharacter',
+                'trackClickNewUser',
+                'trackRedeemGiftCertificate',
+                'trackProductOverview',
+                'trackPaymentOption',
+                'showLeaderboardBanner',
+                'showSkyscraperBanner',
+                'hideLeaderboardBanner',
+                'hideSkyscraperBanner',
+                'showOverlay',
+                'hideOverlay',
+                'cleanUpOverlay',
+                'moveOverlay',
+                'loadOverlay'
+            ].forEach(function (name) {
+                if (typeof window[name] !== 'function') {
+                    window[name] = noop;
+                }
+            });
+            window.adf = window.adf || { Params: {}, track: noop };
+            window.getFp = window.getFp || function () { return 'local-debug-fingerprint'; };
+        }());
+        (function () {
             var debug = new URLSearchParams(location.search).get('debug') === '1';
             var panel = document.getElementById('debug-console');
             var output = document.getElementById('debug-log');
