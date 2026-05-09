@@ -2019,7 +2019,7 @@ const loginActorDetails = (actorRecord = null) => {
 
 const makeLoginStatus = (className, postLoginSeq = postLoginSequence(), actorRecord = null) => typed(className, {
     status: 'Success',
-    actor: loginActorDetails(actorRecord),
+    actor: devActorDetails(actorRecord),
     statusDetails: '',
     actorLocale: [],
     lbs: [],
