@@ -310,7 +310,16 @@ const fallbackPlayHtml = () => `<!doctype html>
     </div>
     <script>
         (function () {
-            var noop = function () { return null; };
+            var flashStub = function (name) {
+                return function () {
+                    try {
+                        console.log('[FLASH CALL] ' + name, Array.prototype.slice.call(arguments).join(' '));
+                    } catch (error) {
+                        console.log('[FLASH CALL] ' + name);
+                    }
+                    return null;
+                };
+            };
             [
                 'trackLogin',
                 'trackCreateNewUser',
@@ -331,10 +340,10 @@ const fallbackPlayHtml = () => `<!doctype html>
                 'loadOverlay'
             ].forEach(function (name) {
                 if (typeof window[name] !== 'function') {
-                    window[name] = noop;
+                    window[name] = flashStub(name);
                 }
             });
-            window.adf = window.adf || { Params: {}, track: noop };
+            window.adf = window.adf || { Params: {}, track: flashStub('adf.track') };
             window.getFp = window.getFp || function () { return 'local-debug-fingerprint'; };
         }());
         (function () {
@@ -1707,7 +1716,7 @@ const makeLoginStatus = (className, postLoginSeq = postLoginSequence(), actorRec
     statusDetails: '',
     actorLocale: [],
     lbs: [],
-    userType: 'Admin',
+    userType: 'Approved',
     adCountryMap: [],
     postLoginSeq,
     previousLastLogin: '',
