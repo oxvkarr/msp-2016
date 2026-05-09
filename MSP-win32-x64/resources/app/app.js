@@ -54,8 +54,15 @@ const buildFlashVars = (baseUrl = 'http://127.0.0.1/', wsUrl = 'http://localhost
         'translationsVersion=2016112_16431',
         `newWsPath=${encodeURIComponent(cleanWs)}`,
         `wsPath=${encodeURIComponent(cleanWs)}`,
+        `wspath=${encodeURIComponent(cleanWs)}`,
+        `basePath=${encodeURIComponent(cleanBase)}`,
+        `basepath=${encodeURIComponent(cleanBase)}`,
         `cdnLocalPath=${encodeURIComponent(cleanBase)}`,
+        `cdnlocalPath=${encodeURIComponent(cleanBase)}`,
+        `cdnlocalpath=${encodeURIComponent(cleanBase)}`,
+        `cdnLocalBasePath=${encodeURIComponent(cleanBase)}`,
         `cdnPath=${encodeURIComponent(cleanBase)}`,
+        `cdnpath=${encodeURIComponent(cleanBase)}`,
         `appUrl=${encodeURIComponent(cleanBase)}`
     ].join('&');
 };
