@@ -4,3 +4,4 @@ node_modules/
 **/msp-debug.log
 **/asset-cache/
 **/.wrangler/
+dist/

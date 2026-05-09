@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session } = require('electron');
+const { app, BrowserWindow, dialog, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -11,6 +11,7 @@ const isDebugMode = process.argv.includes('--debug') || process.env.MSP_DEBUG ==
 const useFiddlerProxy = process.argv.includes('--fiddler') || process.env.MSP_FIDDLER === '1' || exeName.includes('fiddler');
 const fiddlerProxy = process.env.MSP_FIDDLER_PROXY || '127.0.0.1:8888';
 const fiddlerBaseUrl = (process.env.MSP_FIDDLER_BASE_URL || 'http://ipv4.fiddler').replace(/\/+$/, '');
+const TERMS_VERSION = 'msp-private-server-2026-05-09';
 
 process.env.MSP_DEBUG = isDebugMode ? '1' : '0';
 require('./app');
@@ -61,6 +62,53 @@ if (useFiddlerProxy) {
 }
 
 let mainWindow;
+
+const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
+
+const readSettings = () => {
+    try {
+        return JSON.parse(fs.readFileSync(settingsPath(), 'utf8'));
+    } catch (err) {
+        return {};
+    }
+};
+
+const writeSettings = (settings) => {
+    try {
+        fs.mkdirSync(path.dirname(settingsPath()), { recursive: true });
+        fs.writeFileSync(settingsPath(), JSON.stringify(settings, null, 2), 'utf8');
+    } catch (err) {
+        debugLog(`[SETTINGS SAVE FAIL] ${err.message}`);
+    }
+};
+
+const ensureTermsAccepted = async () => {
+    const settings = readSettings();
+    if (settings.termsAcceptedVersion === TERMS_VERSION) return true;
+
+    const result = await dialog.showMessageBox({
+        type: 'info',
+        title: 'MSP Private Server',
+        message: 'Akceptacja regulaminu',
+        detail: [
+            'To jest prywatny serwer i nieoficjalny klient gry.',
+            'Nie wpisuj tutaj hasel z prawdziwego konta MovieStarPlanet.',
+            'Gra laczy sie z prywatna brama serwera i pobiera assety z hostingu projektu.',
+            'Klikajac Akceptuje potwierdzasz, ze uruchamiasz klienta testowo i na wlasna odpowiedzialnosc.'
+        ].join('\n\n'),
+        buttons: ['Akceptuje', 'Zamknij'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true
+    });
+
+    if (result.response !== 0) return false;
+    writeSettings(Object.assign({}, settings, {
+        termsAcceptedVersion: TERMS_VERSION,
+        termsAcceptedAt: new Date().toISOString()
+    }));
+    return true;
+};
 
 const waitForLocalServer = (attempts = 300) => new Promise((resolve) => {
     const check = (left) => {
@@ -177,6 +225,12 @@ function redirectExternalMspRequests() {
 }
 
 async function createWindow() {
+    const accepted = await ensureTermsAccepted();
+    if (!accepted) {
+        app.quit();
+        return;
+    }
+
     redirectExternalMspRequests();
     await clearLocalCaches();
 

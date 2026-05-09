@@ -22,6 +22,7 @@ const mongoStateCollection = process.env.MONGODB_STATE_COLLECTION || 'state';
 const defaultRemoteAssetBaseUrl = 'https://pub-2ec8e3c2f0a24e46ab1defac06482eb3.r2.dev';
 const defaultRemoteGatewayUrl = 'https://msp-2016.onrender.com';
 const remoteAssetBaseUrl = (process.env.REMOTE_ASSET_BASE_URL || defaultRemoteAssetBaseUrl).replace(/\/+$/, '');
+const remoteAssetCacheEnabled = process.env.REMOTE_ASSET_CACHE !== '0';
 const remoteGatewayUrl = (process.env.REMOTE_GATEWAY_URL || defaultRemoteGatewayUrl).replace(/\/+$/, '');
 const remoteGatewayTimeoutMs = Number(process.env.REMOTE_GATEWAY_TIMEOUT_MS || 15000);
 const realMspProxyEnabled = process.env.REAL_MSP_PROXY === '1';
@@ -124,11 +125,19 @@ app.use((req, res, next) => {
     next();
 });
 
+const FLASH_POLICY_XML = `<?xml version="1.0"?>
+<!DOCTYPE cross-domain-policy SYSTEM "http://www.adobe.com/xml/dtds/cross-domain-policy.dtd">
+<cross-domain-policy>
+    <site-control permitted-cross-domain-policies="all"/>
+    <allow-access-from domain="*" to-ports="*" secure="false"/>
+    <allow-http-request-headers-from domain="*" headers="*" secure="false"/>
+</cross-domain-policy>`;
+
 // Sztywne serwowanie crossdomain - to musi zatrzymać pętlę
 app.all('/crossdomain.xml', (req, res) => {
     log(`[POLICY] ${req.headers.host || ''}${req.url}`);
-    res.set('Content-Type', 'text/xml');
-    res.send(`<?xml version="1.0"?><cross-domain-policy><allow-access-from domain="*" to-ports="*" /></cross-domain-policy>`);
+    res.set('Content-Type', 'text/x-cross-domain-policy');
+    res.send(FLASH_POLICY_XML);
 });
 
 const requestBaseUrl = (req) => {
@@ -827,6 +836,31 @@ const downloadRemoteAsset = (url, destination) => new Promise((resolve, reject) 
     });
 });
 
+const pipeRemoteAsset = (url, res, cleanPath) => new Promise((resolve, reject) => {
+    const client = url.startsWith('https:') ? https : http;
+    const request = client.get(url, (response) => {
+        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+            response.resume();
+            pipeRemoteAsset(new URL(response.headers.location, url).toString(), res, cleanPath).then(resolve, reject);
+            return;
+        }
+        if (response.statusCode !== 200) {
+            response.resume();
+            reject(new Error(`HTTP ${response.statusCode}`));
+            return;
+        }
+
+        res.type(contentTypeFor(cleanPath));
+        response.pipe(res);
+        response.on('end', () => resolve(true));
+        response.on('error', reject);
+    });
+    request.on('error', reject);
+    request.setTimeout(15000, () => {
+        request.destroy(new Error('Remote asset timeout'));
+    });
+});
+
 const proxyGatewayRequest = (req, res, method, fallbackHandler) => {
     if (!remoteGatewayUrl) return false;
 
@@ -997,7 +1031,7 @@ const serveRemoteAsset = async (req, res, cleanPath) => {
     }
 
     const cachedPath = path.join(assetCachePath, cleanPath);
-    if (fs.existsSync(cachedPath) && fs.statSync(cachedPath).isFile()) {
+    if (remoteAssetCacheEnabled && fs.existsSync(cachedPath) && fs.statSync(cachedPath).isFile()) {
         res.type(contentTypeFor(cachedPath)).sendFile(cachedPath);
         return true;
     }
@@ -1010,9 +1044,14 @@ const serveRemoteAsset = async (req, res, cleanPath) => {
 
     for (const remoteUrl of candidates) {
         try {
-            await downloadRemoteAsset(remoteUrl, cachedPath);
+            if (remoteAssetCacheEnabled) {
+                await downloadRemoteAsset(remoteUrl, cachedPath);
+                log(`[REMOTE ASSET] ${req.url} -> ${remoteUrl}`);
+                res.type(contentTypeFor(cachedPath)).sendFile(cachedPath);
+                return true;
+            }
+            await pipeRemoteAsset(remoteUrl, res, cleanPath);
             log(`[REMOTE ASSET] ${req.url} -> ${remoteUrl}`);
-            res.type(contentTypeFor(cachedPath)).sendFile(cachedPath);
             return true;
         } catch (err) {
             log(`[REMOTE ASSET TRY MISS] ${remoteUrl} ${err.message}`);
@@ -1132,8 +1171,8 @@ app.get(/^\/msp\/[^/]+\/(.+)$/i, (req, res, next) => {
 
 app.all('/translations/crossdomain.xml', (req, res) => {
     log(`[POLICY] ${req.headers.host || ''}${req.url}`);
-    res.set('Content-Type', 'text/xml');
-    res.send(`<?xml version="1.0"?><cross-domain-policy><allow-access-from domain="*" to-ports="*" /></cross-domain-policy>`);
+    res.set('Content-Type', 'text/x-cross-domain-policy');
+    res.send(FLASH_POLICY_XML);
 });
 
 app.get('/:client(MSPWeb|MSPMobile)/:locale/myResources.txt', async (req, res) => {
@@ -2208,11 +2247,11 @@ const defaultDb = () => ({
     actors: [{
         actorId: DEV_ACTOR_ID,
         name: DEV_USERNAME,
-        level: 101,
-        money: 999999999,
-        diamonds: 999999999,
-        fame: 999999999,
-        fortune: 999999999
+        level: 10,
+        money: 50000,
+        diamonds: 500,
+        fame: 10000,
+        fortune: 10000
     }],
     catalog: {
         clothes: buildClothesCatalog()

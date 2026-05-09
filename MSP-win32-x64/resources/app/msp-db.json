@@ -14,11 +14,11 @@
     {
       "actorId": 1,
       "name": "admin",
-      "level": 101,
-      "money": 999999999,
-      "diamonds": 999999999,
-      "fame": 999999999,
-      "fortune": 999999999
+      "level": 10,
+      "money": 50000,
+      "diamonds": 500,
+      "fame": 10000,
+      "fortune": 10000
     }
   ],
   "catalog": {
