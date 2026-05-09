@@ -280,6 +280,35 @@ const fallbackPlayHtml = () => `<!doctype html>
             word-break: break-word;
             box-sizing: border-box;
         }
+        #debug-resize {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            width: 18px;
+            height: 18px;
+            cursor: nwse-resize;
+            opacity: .9;
+        }
+        #debug-resize:before,
+        #debug-resize:after {
+            content: "";
+            position: absolute;
+            right: 4px;
+            bottom: 4px;
+            border-right: 2px solid rgba(255,255,255,.55);
+            border-bottom: 2px solid rgba(255,255,255,.55);
+        }
+        #debug-resize:before {
+            width: 11px;
+            height: 11px;
+        }
+        #debug-resize:after {
+            width: 6px;
+            height: 6px;
+        }
+        #debug-console.minimized #debug-resize {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -327,6 +356,7 @@ const fallbackPlayHtml = () => `<!doctype html>
             </div>
             <pre id="debug-log"></pre>
         </div>
+        <div id="debug-resize" title="Zmien rozmiar panelu"></div>
     </div>
     <script>
         (function () {
@@ -371,6 +401,7 @@ const fallbackPlayHtml = () => `<!doctype html>
             var panel = document.getElementById('debug-console');
             var output = document.getElementById('debug-log');
             var dragHandle = document.getElementById('debug-drag');
+            var resizeHandle = document.getElementById('debug-resize');
             var minimize = document.getElementById('debug-minimize');
             var clear = document.getElementById('debug-clear');
             var pause = document.getElementById('debug-pause');
@@ -463,6 +494,13 @@ const fallbackPlayHtml = () => `<!doctype html>
                 var dragging = false;
                 var dragOffsetX = 0;
                 var dragOffsetY = 0;
+                var resizing = false;
+                var resizeStartX = 0;
+                var resizeStartY = 0;
+                var resizeStartWidth = 0;
+                var resizeStartHeight = 0;
+                var resizeStartLeft = 0;
+                var resizeStartTop = 0;
                 dragHandle.addEventListener('mousedown', function (event) {
                     if (event.target && event.target.tagName === 'BUTTON') return;
                     dragging = true;
@@ -475,15 +513,48 @@ const fallbackPlayHtml = () => `<!doctype html>
                     panel.style.bottom = 'auto';
                     event.preventDefault();
                 });
+                if (resizeHandle) {
+                    resizeHandle.addEventListener('mousedown', function (event) {
+                        if (panel.classList.contains('minimized')) return;
+                        resizing = true;
+                        var rect = panel.getBoundingClientRect();
+                        resizeStartX = event.clientX;
+                        resizeStartY = event.clientY;
+                        resizeStartWidth = rect.width;
+                        resizeStartHeight = rect.height;
+                        resizeStartLeft = rect.left;
+                        resizeStartTop = rect.top;
+                        panel.style.left = rect.left + 'px';
+                        panel.style.top = rect.top + 'px';
+                        panel.style.right = 'auto';
+                        panel.style.bottom = 'auto';
+                        event.preventDefault();
+                        event.stopPropagation();
+                    });
+                }
                 window.addEventListener('mousemove', function (event) {
-                    if (!dragging) return;
-                    var nextLeft = Math.max(0, Math.min(window.innerWidth - panel.offsetWidth, event.clientX - dragOffsetX));
-                    var nextTop = Math.max(0, Math.min(window.innerHeight - panel.offsetHeight, event.clientY - dragOffsetY));
-                    panel.style.left = nextLeft + 'px';
-                    panel.style.top = nextTop + 'px';
+                    if (resizing) {
+                        var minWidth = 430;
+                        var minHeight = 260;
+                        var maxWidth = Math.max(minWidth, window.innerWidth - resizeStartLeft - 8);
+                        var maxHeight = Math.max(minHeight, window.innerHeight - resizeStartTop - 8);
+                        var nextWidth = Math.max(minWidth, Math.min(maxWidth, resizeStartWidth + event.clientX - resizeStartX));
+                        var nextHeight = Math.max(minHeight, Math.min(maxHeight, resizeStartHeight + event.clientY - resizeStartY));
+                        panel.style.width = nextWidth + 'px';
+                        panel.style.height = nextHeight + 'px';
+                        if (!paused) output.scrollTop = output.scrollHeight;
+                        return;
+                    }
+                    if (dragging) {
+                        var nextLeft = Math.max(0, Math.min(window.innerWidth - panel.offsetWidth, event.clientX - dragOffsetX));
+                        var nextTop = Math.max(0, Math.min(window.innerHeight - panel.offsetHeight, event.clientY - dragOffsetY));
+                        panel.style.left = nextLeft + 'px';
+                        panel.style.top = nextTop + 'px';
+                    }
                 });
                 window.addEventListener('mouseup', function () {
                     dragging = false;
+                    resizing = false;
                 });
             }
             ['log', 'warn', 'error'].forEach(function (level) {
