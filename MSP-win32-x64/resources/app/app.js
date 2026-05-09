@@ -1943,7 +1943,7 @@ const loginActorPersonalInfo = () => typed('com.moviestarplanet.usersession.valu
 
 const loginActorDetails = (actorRecord = null) => {
     const actor = actorDefaults(actorRecord);
-    return typed('MovieStarPlanet.DBML.ActorDetails', {
+    return typed('com.moviestarplanet.usersession.valueobjects.ActorDetails', {
     ActorId: actor.actorId,
     Name: actor.name,
     Level: actor.level,
