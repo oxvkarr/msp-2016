@@ -23,6 +23,9 @@ const defaultRemoteGatewayUrl = 'https://msp-2016.onrender.com';
 const remoteAssetBaseUrl = (process.env.REMOTE_ASSET_BASE_URL || defaultRemoteAssetBaseUrl).replace(/\/+$/, '');
 const remoteGatewayUrl = (process.env.REMOTE_GATEWAY_URL || defaultRemoteGatewayUrl).replace(/\/+$/, '');
 const remoteGatewayTimeoutMs = Number(process.env.REMOTE_GATEWAY_TIMEOUT_MS || 15000);
+const realMspProxyEnabled = process.env.REAL_MSP_PROXY === '1';
+const realMspServer = (process.env.REAL_MSP_SERVER || 'pl').toLowerCase() === 'uk' ? 'gb' : (process.env.REAL_MSP_SERVER || 'pl').toLowerCase();
+const realMspGatewayUrl = `https://ws-${realMspServer}.mspapis.com/Gateway.aspx`;
 const isDebugMode = process.env.MSP_DEBUG === '1';
 const isServerOnly = process.env.MSP_SERVER_ONLY === '1' || process.argv.includes('--server');
 const useRemoteGateway = Boolean(remoteGatewayUrl) && !isServerOnly;
@@ -681,6 +684,74 @@ const proxyGatewayRequest = (req, res, method, fallbackHandler) => {
     });
     proxyReq.end(body);
     log(`[REMOTE GATEWAY] ${method || ''} -> ${targetUrl.toString()}`);
+    return true;
+};
+
+const proxyRealMspApiRequest = (req, res, method, fallbackHandler) => {
+    if (!realMspProxyEnabled) return false;
+
+    const targetUrl = new URL(realMspGatewayUrl);
+    if (method) {
+        targetUrl.searchParams.set('method', method);
+    }
+    const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    let settled = false;
+    const fallback = (reason) => {
+        if (settled || res.headersSent) return;
+        settled = true;
+        if (typeof fallbackHandler === 'function') {
+            fallbackHandler(reason).catch((err) => {
+                log(`[REAL MSP FALLBACK FAIL] ${method || ''} ${err.stack || err.message}`);
+                if (!res.headersSent) {
+                    res.status(502).type('text/plain').send('Real MSP gateway unavailable');
+                }
+            });
+            return;
+        }
+        res.status(502).type('text/plain').send('Real MSP gateway unavailable');
+    };
+
+    const proxyReq = https.request(targetUrl, {
+        method: 'POST',
+        headers: {
+            'referer': 'app:/cache/t1.bin/[[DYNAMIC]]/2',
+            'accept': 'text/xml, application/xml, application/xhtml+xml, text/html;q=0.9, text/plain;q=0.8, text/css, image/png, image/jpeg, image/gif;q=0.8, application/x-shockwave-flash, video/mp4;q=0.9, flv-application/octet-stream;q=0.8, video/x-flv;q=0.7, audio/mp4, application/futuresplash, */*;q=0.5, application/x-mpegURL',
+            'x-flash-version': '32,0,0,100',
+            'content-type': req.headers['content-type'] || 'application/x-amf',
+            'content-length': body.length,
+            'user-agent': 'Mozilla/5.0 (Windows; U; en) AppleWebKit/533.19.4 (KHTML, like Gecko) AdobeAIR/32.0',
+            'connection': 'Keep-Alive'
+        },
+        timeout: remoteGatewayTimeoutMs
+    }, (proxyRes) => {
+        const chunks = [];
+        proxyRes.on('data', (chunk) => chunks.push(chunk));
+        proxyRes.on('end', () => {
+            if (settled || res.headersSent) return;
+            const responseBody = Buffer.concat(chunks);
+            const statusCode = proxyRes.statusCode || 502;
+            if (statusCode >= 400) {
+                log(`[REAL MSP BAD STATUS] ${method || ''} status=${statusCode} bytes=${responseBody.length}`);
+                fallback(`real msp status ${statusCode}`);
+                return;
+            }
+            settled = true;
+            log(`[REAL MSP OK] ${method || ''} status=${statusCode} bytes=${responseBody.length}`);
+            res.status(statusCode);
+            res.set('Content-Type', proxyRes.headers['content-type'] || 'application/x-amf');
+            res.send(responseBody);
+        });
+    });
+
+    proxyReq.on('error', (err) => {
+        log(`[REAL MSP FAIL] ${targetUrl.toString()} ${err.message}`);
+        fallback(err.message);
+    });
+    proxyReq.on('timeout', () => {
+        proxyReq.destroy(new Error('Real MSP gateway timeout'));
+    });
+    proxyReq.end(body);
+    log(`[REAL MSP] ${method || ''} -> ${targetUrl.toString()}`);
     return true;
 };
 
@@ -2311,6 +2382,9 @@ const handleLocalGatewayRequest = async (req, res, fallbackReason = '') => {
 
 app.all('/Gateway.aspx', async (req, res) => {
     const method = req.query.method || '';
+    if (proxyRealMspApiRequest(req, res, method, (reason) => handleLocalGatewayRequest(req, res, reason))) {
+        return;
+    }
     if (shouldProxyRemoteGateway(method) && proxyGatewayRequest(req, res, method, (reason) => handleLocalGatewayRequest(req, res, reason))) {
         return;
     }
@@ -2347,6 +2421,8 @@ app.get('/api/health', (req, res) => {
         source: dbSource,
         mongoConnected: useRemoteGateway || Boolean(mongoClient && mongoDatabase),
         remoteGateway: useRemoteGateway ? remoteGatewayUrl : '',
+        realMspProxy: realMspProxyEnabled,
+        realMspServer,
         remoteAssets: Boolean(remoteAssetBaseUrl),
         locale: forcedLocale,
         serverTime: new Date().toISOString()
