@@ -47,7 +47,7 @@ app.commandLine.appendSwitch('allow-running-insecure-content');
 app.commandLine.appendSwitch('host-rules', localHostRules);
 if (useFiddlerProxy) {
     app.commandLine.appendSwitch('proxy-server', `http://${fiddlerProxy}`);
-    app.commandLine.appendSwitch('proxy-bypass-list', '<-loopback>');
+    app.commandLine.appendSwitch('proxy-bypass-list', '<-loopback>;127.0.0.1translations;127.0.0.1localization;127.0.0.1dictionaries');
 }
 
 let mainWindow;
