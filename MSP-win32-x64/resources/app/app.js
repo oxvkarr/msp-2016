@@ -2804,13 +2804,12 @@ const handleLocalGatewayRequest = async (req, res, fallbackReason = '') => {
         const result = await getAmfResultForMethod(method, decodedArgs);
         const responseBody = buildAmfResponse(envelope ? envelope.version : 0, responseUri, result, {
             amf3: shouldUseAmf3(method, result),
-            legacy: method.endsWith('Login') || method.endsWith('Login2'),
             debugLabel: method
         });
         dumpAmfExchange(method, req.body, responseBody, {
             responseUri,
             amf3: shouldUseAmf3(method, result),
-            legacy: method.endsWith('Login') || method.endsWith('Login2'),
+            legacy: false,
             resultPreview: previewValue(result, 2000)
         });
         res.type('application/x-amf').send(responseBody);
