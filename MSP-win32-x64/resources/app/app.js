@@ -1136,6 +1136,11 @@ app.get(/^\/(?:null)?lookdata_[0-9_]+$/i, (req, res) => {
     res.type('application/octet-stream').send(lookDataPayload());
 });
 
+app.get(/^\/(?:MSP_alpha_blob_)?lookdata_[0-9_]+$/i, (req, res) => {
+    log(`[LOOKDATA] ${req.url}`);
+    res.type('application/octet-stream').send(lookDataPayload());
+});
+
 app.get(/^\/Main_20161102_160430\.swf$/i, async (req, res, next) => {
     const filePath = path.join(publicPath, 'main_20161102_160430.swf');
     if (fs.existsSync(filePath)) {
