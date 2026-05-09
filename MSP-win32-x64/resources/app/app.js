@@ -2060,10 +2060,10 @@ const loginHash = (status) => {
 };
 
 const loginStatus2 = (actorRecord = null) => {
-    const status = serviceLoginStatus(actorRecord);
+    const status = loginStatus(actorRecord);
     const hash = loginHash(status);
     const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
-    return typed('com.moviestarplanet.services.userservice.valueObjects.LoginStatus2', {
+    return typed('com.moviestarplanet.valueObjects.LoginStatus2', {
         loginStatus: status,
         hDetails,
         hash
@@ -2071,12 +2071,12 @@ const loginStatus2 = (actorRecord = null) => {
 };
 
 const invalidLoginStatus2 = () => {
-    const status = serviceLoginStatus();
+    const status = loginStatus();
     status.status = 'InvalidCredentials';
     status.statusDetails = '';
     const hash = loginHash(status);
     const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
-    return typed('com.moviestarplanet.services.userservice.valueObjects.LoginStatus2', {
+    return typed('com.moviestarplanet.valueObjects.LoginStatus2', {
         loginStatus: status,
         hDetails,
         hash
