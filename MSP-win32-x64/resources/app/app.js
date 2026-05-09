@@ -2052,7 +2052,13 @@ const makeLoginStatus = (className, postLoginSeq = postLoginSequence(), actorRec
 
 const loginStatus = (actorRecord = null) => makeLoginStatus('com.moviestarplanet.valueObjects.LoginStatus', postLoginSequence(), actorRecord);
 const serviceLoginStatus = (actorRecord = null) => {
-    return makeLoginStatus('com.moviestarplanet.services.userservice.valueObjects.LoginStatus', servicePostLoginSequence(), actorRecord);
+    const status = makeLoginStatus('com.moviestarplanet.services.userservice.valueObjects.LoginStatus', servicePostLoginSequence(), actorRecord);
+    status.lbse = status.lbs;
+    delete status.lbs;
+    status.mutedUntil = null;
+    status.helpMessage = '';
+    status.amsHash = '';
+    return status;
 };
 
 const webLoginStatus = (actorRecord = null) => loginStatus2(actorRecord, true);
@@ -2069,7 +2075,7 @@ const loginHash = (status) => {
         actor.Level
     ].map((value) => value === undefined || value === null ? '' : String(value));
     log(`[LOGIN HASH VALUES] ${values.join('|')}`);
-    const hash = crypto.createHash('md5').update(`${values.join('')}idu!2*;d`, 'utf8').digest('hex');
+    const hash = crypto.createHash('md5').update(`idu!2*;d${values.join('')}`, 'utf8').digest('hex');
     log(`[LOGIN HASH] ${hash}`);
     return hash;
 };
