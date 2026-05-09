@@ -2031,10 +2031,7 @@ const makeLoginStatus = (className, postLoginSeq = postLoginSequence(), actorRec
     userIp: 2130706433,
     ticket: 'local-admin-ticket',
     piggyBank: null,
-    mutedUntil: null,
-    helpMessage: '',
-    purchaseTypeId: 0,
-    amsHash: ''
+    purchaseTypeId: 0
 });
 
 const loginStatus = (actorRecord = null) => makeLoginStatus('com.moviestarplanet.valueObjects.LoginStatus', postLoginSequence(), actorRecord);
