@@ -46,8 +46,13 @@ app.commandLine.appendSwitch('ignore-certificate-errors');
 app.commandLine.appendSwitch('allow-running-insecure-content');
 app.commandLine.appendSwitch('host-rules', localHostRules);
 if (useFiddlerProxy) {
-    app.commandLine.appendSwitch('proxy-server', `http://${fiddlerProxy}`);
-    app.commandLine.appendSwitch('proxy-bypass-list', '<-loopback>;127.0.0.1translations;127.0.0.1localization;127.0.0.1dictionaries');
+    const proxyPac = [
+        'function FindProxyForURL(url, host) {',
+        '  if (host === "127.0.0.1translations" || host === "127.0.0.1localization" || host === "127.0.0.1dictionaries") return "DIRECT";',
+        `  return "PROXY ${fiddlerProxy}; DIRECT";`,
+        '}'
+    ].join('\n');
+    app.commandLine.appendSwitch('proxy-pac-url', `data:application/x-ns-proxy-autoconfig;base64,${Buffer.from(proxyPac).toString('base64')}`);
 }
 
 let mainWindow;
