@@ -1833,9 +1833,7 @@ const serviceLoginStatus = (actorRecord = null) => {
     return status;
 };
 
-const webLoginStatus = (actorRecord = null) => {
-    return loginStatus2(actorRecord);
-};
+const webLoginStatus = (actorRecord = null) => loginStatus(actorRecord);
 
 const loginHash = (status) => {
     const actor = status.actor || {};
@@ -1874,6 +1872,13 @@ const invalidLoginStatus2 = () => {
         hDetails,
         hash
     };
+};
+
+const invalidLoginStatus = () => {
+    const status = loginStatus();
+    status.status = 'InvalidCredentials';
+    status.statusDetails = '';
+    return status;
 };
 
 const createNewUserStatus = (actorRecord = null) => {
@@ -2515,7 +2520,7 @@ const getAmfResultForMethod = async (method, args = []) => {
     }
     if (method.endsWith('Login')) {
         const actor = actorForLoginArgs(args);
-        return actor ? webLoginStatus(actor) : invalidLoginStatus2();
+        return actor ? webLoginStatus(actor) : invalidLoginStatus();
     }
     if (method.endsWith('CreateNewUser') || method.endsWith('CreateNewUserOld')) {
         return createAccountFromArgs(args);
