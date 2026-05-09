@@ -1508,11 +1508,11 @@ const actorDefaults = (actorRecord = {}) => {
     return {
     actorId: actor.actorId || actor.ActorId || DEV_ACTOR_ID,
     name: actor.name || actor.Name || DEV_USERNAME,
-    level: actor.level || actor.Level || 101,
-    money: actor.money || actor.Money || 999999999,
-    diamonds: actor.diamonds || actor.Diamonds || 999999999,
-    fame: actor.fame || actor.Fame || 999999999,
-    fortune: actor.fortune || actor.Fortune || 999999999,
+    level: actor.level || actor.Level || 1,
+    money: actor.money || actor.Money || 0,
+    diamonds: actor.diamonds || actor.Diamonds || 0,
+    fame: actor.fame || actor.Fame || 0,
+    fortune: actor.fortune || actor.Fortune || 0,
     skinSWF: actor.skinSWF || actor.SkinSWF || 'swf/skins/maleskin.swf',
     skinColor: actor.skinColor || actor.SkinColor || '0xffd1b3',
     eyeId: actor.eyeId || actor.EyeId || 2,
@@ -1580,7 +1580,7 @@ const devActorDetails = (actorRecord = null) => {
     NameBeforeDeleted: '',
     LastTransactionId: 0,
     AllowCommunication: 1,
-    Diamonds: 999999999,
+    Diamonds: actor.diamonds,
     PopUpStyleId: 0,
     BoyFriend: null,
     ActorClothesRels: starterClothes().slice(0, 6),
@@ -1689,7 +1689,7 @@ const loginActorDetails = (actorRecord = null) => {
     GiftStatus: 0,
     MarketingNextStepLogins: 0,
     MarketingStep: 0,
-    TotalVipDays: 9999,
+    TotalVipDays: 0,
     RecyclePoints: 0,
     EmailSettings: 0,
     TimeOfLastAutographGivenStr: '',
@@ -1702,7 +1702,7 @@ const loginActorDetails = (actorRecord = null) => {
     NameBeforeDeleted: '',
     LastTransactionId: 0,
     AllowCommunication: 1,
-    Diamonds: 999999999,
+    Diamonds: actor.diamonds,
     PopUpStyleId: 0,
     BoyFriend: null,
     ActorPersonalInfo: loginActorPersonalInfo(),
@@ -1752,6 +1752,7 @@ const loginHash = (status) => {
         actor.Fame,
         actor.Level
     ].map((value) => value === undefined || value === null ? '' : String(value));
+    log(`[LOGIN HASH VALUES] ${values.join('|')}`);
     return crypto.createHash('md5').update(`idu!2*;d${values.join('')}`, 'utf8').digest('hex');
 };
 
