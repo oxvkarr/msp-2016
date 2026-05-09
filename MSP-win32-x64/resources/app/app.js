@@ -625,6 +625,7 @@ const fallbackPlayHtml = () => `<!doctype html>
             if (filter) filter.oninput = renderLog;
             console.log('Fallback play.html loaded');
             if (debug) {
+                var fiddlerMode = new URLSearchParams(location.search).get('fiddler') === '1';
                 var serverLogCursor = 0;
                 var pollDbStatus = function () {
                     fetch('/api/db/status')
@@ -638,7 +639,9 @@ const fallbackPlayHtml = () => `<!doctype html>
                             setLight('db', 'bad', 'Baza');
                         });
                 };
+                var serverLogUnavailableShown = false;
                 var pollServerLogs = function () {
+                    if (fiddlerMode) return;
                     fetch('/api/debug/logs?since=' + serverLogCursor)
                         .then(function (response) {
                             if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -651,12 +654,19 @@ const fallbackPlayHtml = () => `<!doctype html>
                             });
                         })
                         .catch(function (error) {
-                            write('SERVER', ['debug logs unavailable: ' + error.message]);
+                            if (!serverLogUnavailableShown) {
+                                serverLogUnavailableShown = true;
+                                write('SERVER', ['debug logs unavailable: ' + error.message]);
+                            }
                         });
                 };
                 pollDbStatus();
-                pollServerLogs();
-                setInterval(pollServerLogs, 1000);
+                if (fiddlerMode) {
+                    write('SERVER', ['Fiddler mode: panel polling disabled, use msp-debug.log / amf-dumps']);
+                } else {
+                    pollServerLogs();
+                    setInterval(pollServerLogs, 1000);
+                }
                 setInterval(pollDbStatus, 5000);
             }
         }());

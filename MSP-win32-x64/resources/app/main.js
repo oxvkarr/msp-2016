@@ -204,7 +204,7 @@ async function createWindow() {
     if (!ready && isDebugMode) {
         debugLog('[LOCAL SERVER] timed out waiting for /play.html');
     }
-    mainWindow.loadURL(`http://127.0.0.1/play.html?${PLAY_PARAMS}${isDebugMode ? '&debug=1' : ''}`);
+    mainWindow.loadURL(`http://127.0.0.1/play.html?${PLAY_PARAMS}${isDebugMode ? '&debug=1' : ''}${useFiddlerProxy ? '&fiddler=1' : ''}`);
 }
 
 app.on('ready', createWindow);
