@@ -102,11 +102,15 @@ const fallbackPlayHtml = () => `<!doctype html>
             right: 14px;
             bottom: 14px;
             z-index: 999999;
-            width: 560px;
+            min-width: 430px;
+            min-height: 260px;
+            width: min(760px, calc(100vw - 28px));
+            height: min(620px, calc(100vh - 28px));
             max-width: calc(100vw - 28px);
-            height: 420px;
+            max-height: calc(100vh - 28px);
             display: none;
             overflow: hidden;
+            resize: both;
             border: 1px solid rgba(255,255,255,.18);
             border-radius: 8px;
             background: rgba(14, 18, 28, .94);
@@ -149,13 +153,23 @@ const fallbackPlayHtml = () => `<!doctype html>
             background: rgba(255,255,255,.13);
         }
         #debug-console.minimized {
+            min-height: 34px;
             height: 34px;
+            resize: none;
         }
         #debug-console.minimized .debug-body {
             display: none;
         }
+        #debug-console .debug-body {
+            height: calc(100% - 34px);
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
         #debug-links {
             display: grid;
+            flex: 0 0 auto;
             grid-template-columns: repeat(4, 1fr);
             gap: 6px;
             padding: 8px 10px;
@@ -170,6 +184,7 @@ const fallbackPlayHtml = () => `<!doctype html>
         }
         #debug-stats {
             display: grid;
+            flex: 0 0 auto;
             grid-template-columns: repeat(4, 1fr);
             gap: 6px;
             padding: 8px 10px;
@@ -193,6 +208,7 @@ const fallbackPlayHtml = () => `<!doctype html>
         }
         #debug-lights {
             display: grid;
+            flex: 0 0 auto;
             grid-template-columns: repeat(5, 1fr);
             gap: 6px;
             padding: 8px 10px;
@@ -236,6 +252,7 @@ const fallbackPlayHtml = () => `<!doctype html>
         }
         #debug-filter-row {
             display: flex;
+            flex: 0 0 auto;
             gap: 6px;
             padding: 0 10px 8px;
             border-bottom: 1px solid rgba(255,255,255,.08);
@@ -253,11 +270,14 @@ const fallbackPlayHtml = () => `<!doctype html>
             font: 12px Consolas, monospace;
         }
         #debug-log {
-            height: 262px;
+            flex: 1 1 auto;
+            min-height: 90px;
+            height: auto;
             margin: 0;
             padding: 10px;
             overflow: auto;
             white-space: pre-wrap;
+            word-break: break-word;
             box-sizing: border-box;
         }
     </style>
@@ -303,7 +323,7 @@ const fallbackPlayHtml = () => `<!doctype html>
             </section>
             <div id="debug-filter-row">
                 <input id="debug-filter" placeholder="Filtr logów, np. Gateway albo MISS">
-                <button id="debug-scroll" class="secondary" type="button">Bottom</button>
+                <button id="debug-scroll" class="secondary" type="button">Dół</button>
             </div>
             <pre id="debug-log"></pre>
         </div>
