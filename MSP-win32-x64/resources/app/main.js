@@ -10,6 +10,7 @@ const exeName = path.basename(process.execPath || '').toLowerCase();
 const isDebugMode = process.argv.includes('--debug') || process.env.MSP_DEBUG === '1' || exeName.includes('debug');
 const useFiddlerProxy = process.argv.includes('--fiddler') || process.env.MSP_FIDDLER === '1' || exeName.includes('fiddler');
 const fiddlerProxy = process.env.MSP_FIDDLER_PROXY || '127.0.0.1:8888';
+const fiddlerBaseUrl = (process.env.MSP_FIDDLER_BASE_URL || 'http://ipv4.fiddler').replace(/\/+$/, '');
 
 process.env.MSP_DEBUG = isDebugMode ? '1' : '0';
 require('./app');
@@ -17,6 +18,9 @@ const localHostRules = [
     'MAP 127.0.0.1translations 127.0.0.1',
     'MAP 127.0.0.1localization 127.0.0.1',
     'MAP 127.0.0.1dictionaries 127.0.0.1',
+    'MAP ipv4.fiddlertranslations 127.0.0.1',
+    'MAP ipv4.fiddlerlocalization 127.0.0.1',
+    'MAP ipv4.fiddlerdictionaries 127.0.0.1',
     'MAP cdn.alpha.moviestarplanet.com 127.0.0.1',
     'MAP upload.alpha.moviestarplanet.com 127.0.0.1',
     'MAP alpha.moviestarplanet.com 127.0.0.1',
@@ -49,6 +53,7 @@ if (useFiddlerProxy) {
     const proxyPac = [
         'function FindProxyForURL(url, host) {',
         '  if (host === "127.0.0.1translations" || host === "127.0.0.1localization" || host === "127.0.0.1dictionaries") return "DIRECT";',
+        '  if (host === "ipv4.fiddlertranslations" || host === "ipv4.fiddlerlocalization" || host === "ipv4.fiddlerdictionaries") return "DIRECT";',
         `  return "PROXY ${fiddlerProxy}; DIRECT";`,
         '}'
     ].join('\n');
@@ -209,7 +214,8 @@ async function createWindow() {
     if (!ready && isDebugMode) {
         debugLog('[LOCAL SERVER] timed out waiting for /play.html');
     }
-    mainWindow.loadURL(`http://127.0.0.1/play.html?${PLAY_PARAMS}${isDebugMode ? '&debug=1' : ''}${useFiddlerProxy ? '&fiddler=1' : ''}`);
+    const playBaseUrl = useFiddlerProxy ? fiddlerBaseUrl : LOCAL_BASE_URL;
+    mainWindow.loadURL(`${playBaseUrl}/play.html?${PLAY_PARAMS}${isDebugMode ? '&debug=1' : ''}${useFiddlerProxy ? '&fiddler=1' : ''}`);
 }
 
 app.on('ready', createWindow);
