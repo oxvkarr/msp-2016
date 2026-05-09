@@ -1859,9 +1859,7 @@ const makeLoginStatus = (className, postLoginSeq = postLoginSequence(), actorRec
 
 const loginStatus = (actorRecord = null) => makeLoginStatus('com.moviestarplanet.valueObjects.LoginStatus', postLoginSequence(), actorRecord);
 const serviceLoginStatus = (actorRecord = null) => {
-    const status = makeLoginStatus('', null, actorRecord);
-    delete status.__class;
-    return status;
+    return makeLoginStatus('com.moviestarplanet.services.userservice.valueObjects.LoginStatus', servicePostLoginSequence(), actorRecord);
 };
 
 const webLoginStatus = (actorRecord = null) => loginStatus2(actorRecord);
@@ -1885,11 +1883,11 @@ const loginStatus2 = (actorRecord = null) => {
     const status = serviceLoginStatus(actorRecord);
     const hash = loginHash(status);
     const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
-    return {
+    return typed('com.moviestarplanet.services.userservice.valueObjects.LoginStatus2', {
         loginStatus: status,
         hDetails,
         hash
-    };
+    });
 };
 
 const invalidLoginStatus2 = () => {
@@ -1898,11 +1896,11 @@ const invalidLoginStatus2 = () => {
     status.statusDetails = '';
     const hash = loginHash(status);
     const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
-    return {
+    return typed('com.moviestarplanet.services.userservice.valueObjects.LoginStatus2', {
         loginStatus: status,
         hDetails,
         hash
-    };
+    });
 };
 
 const invalidLoginStatus = () => {
