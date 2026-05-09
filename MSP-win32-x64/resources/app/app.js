@@ -1582,7 +1582,7 @@ const makePostLoginSequence = (className) => typed(className, {
 const postLoginSequence = () => makePostLoginSequence('com.moviestarplanet.valueObjects.PostLoginSequenceDomain');
 const servicePostLoginSequence = () => makePostLoginSequence('com.moviestarplanet.services.userservice.valueObjects.PostLoginSequenceDomain');
 
-const loginActorPersonalInfo = () => typed('MovieStarPlanet.DBML.ActorPersonalInfo', {
+const loginActorPersonalInfo = () => typed('com.moviestarplanet.usersession.valueobjects.ActorPersonalInfo', {
     ActorId: DEV_ACTOR_ID,
     BirthDate: null,
     ParentEmail: '',
@@ -1599,7 +1599,7 @@ const loginActorPersonalInfo = () => typed('MovieStarPlanet.DBML.ActorPersonalIn
 
 const loginActorDetails = (actorRecord = null) => {
     const actor = actorDefaults(actorRecord);
-    return typed('MovieStarPlanet.DBML.ActorDetails', {
+    return typed('com.moviestarplanet.usersession.valueobjects.ActorDetails', {
     ActorId: actor.actorId,
     Name: actor.name,
     Level: actor.level,
@@ -1668,8 +1668,8 @@ const loginActorDetails = (actorRecord = null) => {
     Diamonds: 999999999,
     PopUpStyleId: 0,
     BoyFriend: null,
-    ActorPersonalInfo: null,
-    ActorRelationships: null
+    ActorPersonalInfo: loginActorPersonalInfo(),
+    ActorRelationships: []
 });
 };
 
