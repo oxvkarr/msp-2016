@@ -1647,12 +1647,11 @@ const loginStatus2 = (actorRecord = null) => {
     const status = serviceLoginStatus(actorRecord);
     const hash = loginHash(status);
     const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
-    delete status.__class;
-    return {
+    return typed('com.moviestarplanet.services.userservice.valueObjects.LoginStatus2', {
         loginStatus: status,
         hDetails,
         hash
-    };
+    });
 };
 
 const invalidLoginStatus2 = () => {
@@ -1661,12 +1660,11 @@ const invalidLoginStatus2 = () => {
     status.statusDetails = '';
     const hash = loginHash(status);
     const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
-    delete status.__class;
-    return {
+    return typed('com.moviestarplanet.services.userservice.valueObjects.LoginStatus2', {
         loginStatus: status,
         hDetails,
         hash
-    };
+    });
 };
 
 const createNewUserStatus = (actorRecord = null) => {
