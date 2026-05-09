@@ -1883,11 +1883,12 @@ const loginHash = (status) => {
 
 const loginStatus2 = (actorRecord = null) => {
     const status = serviceLoginStatus(actorRecord);
-    loginHash(status);
+    const hash = loginHash(status);
     const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
     return {
         loginStatus: status,
-        hDetails
+        hDetails,
+        hash
     };
 };
 
@@ -1895,11 +1896,12 @@ const invalidLoginStatus2 = () => {
     const status = serviceLoginStatus();
     status.status = 'InvalidCredentials';
     status.statusDetails = '';
-    loginHash(status);
+    const hash = loginHash(status);
     const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
     return {
         loginStatus: status,
-        hDetails
+        hDetails,
+        hash
     };
 };
 
