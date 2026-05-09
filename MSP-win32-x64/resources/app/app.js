@@ -12,6 +12,7 @@ const app = express();
 
 const publicPath = path.join(__dirname, 'public');
 const assetCachePath = path.join(__dirname, 'asset-cache');
+const amfDumpPath = path.join(__dirname, 'amf-dumps');
 const dbPath = path.join(__dirname, 'msp-db.json');
 const debugLogPath = path.join(__dirname, 'msp-debug.log');
 const serverPidPath = path.join(__dirname, 'msp-server.pid');
@@ -47,6 +48,7 @@ const flashVars = `${startupParams}&resourceModuleUrl=swf/locales/${forcedLocale
 let mongoClient = null;
 let mongoDatabase = null;
 let dbSource = 'json';
+let amfDumpCounter = 0;
 const recentLogs = [];
 const isDebugLogRequest = (req) => req.path === '/api/debug/logs' || req.path === '/api/db/status';
 const log = (message) => {
@@ -58,6 +60,35 @@ const log = (message) => {
     if (isDebugMode) {
         console.log(message);
         fs.appendFile(debugLogPath, `${line}\n`, () => {});
+    }
+};
+
+const safeDumpName = (value) => String(value || 'unknown')
+    .replace(/^.*\./, '')
+    .replace(/[^a-z0-9_-]+/gi, '_')
+    .slice(0, 80) || 'unknown';
+
+const dumpAmfExchange = (method, requestBody, responseBody, meta = {}) => {
+    if (!isDebugMode) return;
+    try {
+        fs.mkdirSync(amfDumpPath, { recursive: true });
+        amfDumpCounter += 1;
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const base = `${stamp}_${String(amfDumpCounter).padStart(4, '0')}_${safeDumpName(method)}`;
+        const reqFile = path.join(amfDumpPath, `${base}.request.amf`);
+        const resFile = path.join(amfDumpPath, `${base}.response.amf`);
+        const metaFile = path.join(amfDumpPath, `${base}.json`);
+        fs.writeFileSync(reqFile, Buffer.isBuffer(requestBody) ? requestBody : Buffer.alloc(0));
+        fs.writeFileSync(resFile, Buffer.isBuffer(responseBody) ? responseBody : Buffer.alloc(0));
+        fs.writeFileSync(metaFile, JSON.stringify({
+            method,
+            requestBytes: Buffer.isBuffer(requestBody) ? requestBody.length : 0,
+            responseBytes: Buffer.isBuffer(responseBody) ? responseBody.length : 0,
+            ...meta
+        }, null, 2));
+        log(`[AMF DUMP] ${method} -> ${path.relative(__dirname, metaFile)}`);
+    } catch (err) {
+        log(`[AMF DUMP FAIL] ${method} ${err.message}`);
     }
 };
 
@@ -2594,18 +2625,33 @@ const handleLocalGatewayRequest = async (req, res, fallbackReason = '') => {
     }
     try {
         const result = await getAmfResultForMethod(method, decodedArgs);
-        res.type('application/x-amf').send(buildAmfResponse(envelope ? envelope.version : 0, responseUri, result, {
+        const responseBody = buildAmfResponse(envelope ? envelope.version : 0, responseUri, result, {
             amf3: shouldUseAmf3(method, result),
             legacy: method.endsWith('Login') || method.endsWith('Login2'),
             debugLabel: method
-        }));
+        });
+        dumpAmfExchange(method, req.body, responseBody, {
+            responseUri,
+            amf3: shouldUseAmf3(method, result),
+            legacy: method.endsWith('Login') || method.endsWith('Login2'),
+            resultPreview: previewValue(result, 2000)
+        });
+        res.type('application/x-amf').send(responseBody);
     } catch (err) {
         log(`[AMF ERROR] ${method} ${err.stack || err.message}`);
         const result = okResult();
-        res.type('application/x-amf').send(buildAmfResponse(envelope ? envelope.version : 0, responseUri, result, {
+        const responseBody = buildAmfResponse(envelope ? envelope.version : 0, responseUri, result, {
             amf3: true,
             debugLabel: `${method} ERROR_FALLBACK`
-        }));
+        });
+        dumpAmfExchange(method, req.body, responseBody, {
+            responseUri,
+            amf3: true,
+            legacy: false,
+            error: err.message,
+            resultPreview: previewValue(result, 2000)
+        });
+        res.type('application/x-amf').send(responseBody);
     }
 };
 
