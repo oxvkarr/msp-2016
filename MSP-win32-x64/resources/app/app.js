@@ -1208,6 +1208,75 @@ app.get('/api/debug/logs', (req, res) => {
     });
 });
 
+const xmlEscape = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+
+const soapEnvelope = (action, innerXml) => `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <soap:Body>
+    <${action}Response xmlns="http://moviestarplanet.com/">
+      ${innerXml}
+    </${action}Response>
+  </soap:Body>
+</soap:Envelope>`;
+
+const soapActionFrom = (req) => {
+    const headerAction = String(req.headers.soapaction || '').replace(/"/g, '').split('/').pop();
+    if (headerAction) return headerAction;
+    const body = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
+    const matches = [...body.matchAll(/<([A-Za-z0-9_:]+)(?:\s|>)/g)]
+        .map((match) => match[1].replace(/^(soap|soap12):/i, ''))
+        .filter((name) => !/^(Envelope|Header|Body|TicketHeader)$/i.test(name));
+    return matches[0] || 'Unknown';
+};
+
+const sendSoapResult = (res, action, resultXml) => {
+    res.set('Content-Type', 'text/xml; charset=utf-8');
+    res.send(soapEnvelope(action, resultXml));
+};
+
+const userServiceWsdl = `<?xml version="1.0" encoding="utf-8"?>
+<definitions xmlns="http://schemas.xmlsoap.org/wsdl/" xmlns:tns="http://moviestarplanet.com/" targetNamespace="http://moviestarplanet.com/">
+  <service name="UserService">
+    <documentation>Local MSP compatibility endpoint</documentation>
+  </service>
+</definitions>`;
+
+app.all(/^\/+WebService\/User\/UserService\.asmx$/i, (req, res) => {
+    const action = soapActionFrom(req);
+    const body = Buffer.isBuffer(req.body) ? req.body.toString('utf8').replace(/\s+/g, ' ').slice(0, 220) : '';
+    log(`[SOAP USER] ${req.method} ${req.url} action=${action} body=${body}`);
+
+    if (req.method === 'GET' || /wsdl/i.test(req.url)) {
+        res.type('text/xml').send(userServiceWsdl);
+        return;
+    }
+
+    if (/GetIPLoginType/i.test(action)) {
+        sendSoapResult(res, 'GetIPLoginType', '<GetIPLoginTypeResult>0</GetIPLoginTypeResult>');
+        return;
+    }
+    if (/getLoginHistory/i.test(action)) {
+        sendSoapResult(res, 'getLoginHistory', '<getLoginHistoryResult />');
+        return;
+    }
+    if (/Login2/i.test(action)) {
+        sendSoapResult(res, 'Login2', '<Login2Result><loginStatus><status>Success</status></loginStatus></Login2Result>');
+        return;
+    }
+    if (/Login/i.test(action)) {
+        sendSoapResult(res, 'Login', '<LoginResult><status>Success</status></LoginResult>');
+        return;
+    }
+
+    const safeAction = /^[A-Za-z_][A-Za-z0-9_]*$/.test(action) && action !== 'Unknown' ? action : 'GetIPLoginType';
+    sendSoapResult(res, safeAction, `<${safeAction}Result>false</${safeAction}Result>`);
+});
+
 app.use(express.static(publicPath));
 
 app.get('*', async (req, res, next) => {
