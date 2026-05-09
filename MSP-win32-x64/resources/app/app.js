@@ -1102,8 +1102,9 @@ const amf0Array = (items) => {
 };
 
 const amf0Object = (object) => {
-    const parts = [Buffer.from([0x03])];
-    Object.keys(object).forEach((key) => {
+    const className = object && object.__class ? String(object.__class) : '';
+    const parts = className ? [Buffer.from([0x10]), writeUtf(className)] : [Buffer.from([0x03])];
+    Object.keys(object).filter((key) => key !== '__class').forEach((key) => {
         parts.push(writeUtf(key));
         parts.push(amf0Value(object[key]));
     });
@@ -1257,13 +1258,17 @@ const previewValue = (value, limit = 900) => {
 
 const buildAmfResponse = (version, responseUri, value, options = {}) => {
     let body;
-    let usedAmfjs = true;
-    try {
-        body = amfjsBody(value, options.amf3);
-    } catch (err) {
-        log(`[AMFJS FALLBACK] ${err.message}`);
-        usedAmfjs = false;
+    let usedAmfjs = !options.legacy;
+    if (options.legacy) {
         body = options.amf3 ? amf0Amf3Value(value) : amf0Value(value);
+    } else {
+        try {
+            body = amfjsBody(value, options.amf3);
+        } catch (err) {
+            log(`[AMFJS FALLBACK] ${err.message}`);
+            usedAmfjs = false;
+            body = options.amf3 ? amf0Amf3Value(value) : amf0Value(value);
+        }
     }
     if (options.debugLabel) {
         log(`[AMF RESPONSE] ${options.debugLabel} amf=${options.amf3 ? 'AMF3' : 'AMF0'} encoder=${usedAmfjs ? 'amfjs' : 'legacy'} length=${body.length} hex=${body.slice(0, 32).toString('hex')}`);
@@ -2378,7 +2383,7 @@ const genericWriteResult = (method, leaf) => {
 };
 
 const shouldUseAmf3 = (method, result) => {
-    if (method.endsWith('Login') || method.endsWith('Login2')) return true;
+    if (method.endsWith('Login') || method.endsWith('Login2')) return false;
     if (method.endsWith('GetAppSettings')) return true;
     if (result && typeof result === 'object' && result.__class) return true;
     return /Login|LoadDataForRegisterNewUser|LoadActorDetails|UserSession|UserService|MovieStar|Shopping|Shop|Spending|Profile|Friend|Movie|Look|News|Quest|Gift|Admin|Payment|Messaging|Room|Inventory|Wardrobe|Logging/i.test(method);
@@ -2496,6 +2501,7 @@ const handleLocalGatewayRequest = async (req, res, fallbackReason = '') => {
         const result = await getAmfResultForMethod(method, decodedArgs);
         res.type('application/x-amf').send(buildAmfResponse(envelope ? envelope.version : 0, responseUri, result, {
             amf3: shouldUseAmf3(method, result),
+            legacy: method.endsWith('Login') || method.endsWith('Login2'),
             debugLabel: method
         }));
     } catch (err) {
