@@ -1943,7 +1943,7 @@ const loginActorPersonalInfo = () => typed('com.moviestarplanet.usersession.valu
 
 const loginActorDetails = (actorRecord = null) => {
     const actor = actorDefaults(actorRecord);
-    return typed('com.moviestarplanet.usersession.valueobjects.ActorDetails', {
+    return typed('MovieStarPlanet.DBML.ActorDetails', {
     ActorId: actor.actorId,
     Name: actor.name,
     Level: actor.level,
@@ -2061,12 +2061,11 @@ const loginHash = (status) => {
 
 const loginStatus2 = (actorRecord = null) => {
     const status = loginStatus(actorRecord);
-    const hash = loginHash(status);
+    loginHash(status);
     const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
     return typed('com.moviestarplanet.valueObjects.LoginStatus2', {
         loginStatus: status,
-        hDetails,
-        hash
+        hDetails
     });
 };
 
@@ -2080,8 +2079,7 @@ const invalidLoginStatus2 = () => {
     status.ticket = '';
     return typed('com.moviestarplanet.valueObjects.LoginStatus2', {
         loginStatus: status,
-        hDetails: '',
-        hash: ''
+        hDetails: ''
     });
 };
 
