@@ -44,7 +44,21 @@ const normalizeLocaleCode = (value) => {
 const forcedLocale = normalizeLocaleCode(process.env.MSP_LOCALE || 'pl_PL');
 const forcedLocalePath = forcedLocale.toLowerCase();
 const startupParams = 'country=pl&locale=pl_PL&language=pl&selectedLocale=pl_PL&server=pl&domain=pl';
-const flashVars = `${startupParams}&resourceModuleUrl=swf/locales/${forcedLocalePath}_resourcemodule.swf?v=Main_20161102_160430&swfVer=Main_20161102_160430&translationsVersion=2016112_16431`;
+const buildFlashVars = (baseUrl = 'http://127.0.0.1/', wsUrl = 'http://localhost:1600/') => {
+    const cleanBase = String(baseUrl || 'http://127.0.0.1/').replace(/\/?$/, '/');
+    const cleanWs = String(wsUrl || 'http://localhost:1600/').replace(/\/?$/, '/');
+    return [
+        startupParams,
+        `resourceModuleUrl=${encodeURIComponent(`swf/locales/${forcedLocalePath}_resourcemodule.swf?v=Main_20161102_160430`)}`,
+        'swfVer=Main_20161102_160430',
+        'translationsVersion=2016112_16431',
+        `newWsPath=${encodeURIComponent(cleanWs)}`,
+        `wsPath=${encodeURIComponent(cleanWs)}`,
+        `cdnLocalPath=${encodeURIComponent(cleanBase)}`,
+        `cdnPath=${encodeURIComponent(cleanBase)}`,
+        `appUrl=${encodeURIComponent(cleanBase)}`
+    ].join('&');
+};
 let mongoClient = null;
 let mongoDatabase = null;
 let dbSource = 'json';
@@ -110,7 +124,21 @@ app.all('/crossdomain.xml', (req, res) => {
     res.send(`<?xml version="1.0"?><cross-domain-policy><allow-access-from domain="*" to-ports="*" /></cross-domain-policy>`);
 });
 
-const fallbackPlayHtml = () => `<!doctype html>
+const requestBaseUrl = (req) => {
+    const host = req && req.headers && req.headers.host ? req.headers.host : '127.0.0.1';
+    return `http://${host}/`;
+};
+
+const requestWsUrl = (req) => {
+    const host = req && req.headers && req.headers.host ? req.headers.host.split(':')[0] : 'localhost';
+    return host.toLowerCase() === 'ipv4.fiddler'
+        ? 'http://ipv4.fiddler:1600/'
+        : 'http://localhost:1600/';
+};
+
+const fallbackPlayHtml = (req) => {
+    const flashVars = buildFlashVars(requestBaseUrl(req), requestWsUrl(req));
+    return `<!doctype html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -673,6 +701,7 @@ const fallbackPlayHtml = () => `<!doctype html>
     </script>
 </body>
 </html>`;
+};
 
 const sendPlayHtml = (req, res) => {
     if (req.path === '/play.html' && !req.query.country) {
@@ -686,7 +715,7 @@ const sendPlayHtml = (req, res) => {
         return;
     }
     log(`[FALLBACK] ${req.url} -> embedded play.html`);
-    res.type('html').send(fallbackPlayHtml());
+    res.type('html').send(fallbackPlayHtml(req));
 };
 
 
