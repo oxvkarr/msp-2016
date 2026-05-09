@@ -2074,12 +2074,14 @@ const invalidLoginStatus2 = () => {
     const status = loginStatus();
     status.status = 'InvalidCredentials';
     status.statusDetails = '';
-    const hash = loginHash(status);
-    const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
+    status.actor = null;
+    status.actorLocale = [];
+    status.lbs = [];
+    status.ticket = '';
     return typed('com.moviestarplanet.valueObjects.LoginStatus2', {
         loginStatus: status,
-        hDetails,
-        hash
+        hDetails: '',
+        hash: ''
     });
 };
 
@@ -2270,14 +2272,15 @@ const createAccountFromArgs = async (args = []) => {
 const actorForLoginArgs = (args = []) => {
     const { username, password } = credentialsFromArgs(args);
     const user = findUserByName(username);
+    let actor = null;
 
     if (user && passwordMatches(user, password)) {
-        return findActorById(user.actorId) || null;
+        actor = findActorById(user.actorId) || null;
+    } else if (String(username || '').toLowerCase() === DEV_USERNAME && password === DEV_PASSWORD) {
+        actor = findActorById(DEV_ACTOR_ID) || db.actors[0] || null;
     }
-    if (String(username || '').toLowerCase() === DEV_USERNAME && password === DEV_PASSWORD) {
-        return findActorById(DEV_ACTOR_ID) || db.actors[0] || null;
-    }
-    return null;
+    log(`[LOGIN AUTH] username=${username || ''} ${actor ? 'ok' : 'invalid'}`);
+    return actor;
 };
 
 const relativePublicPath = (filePath) => path.relative(publicPath, filePath).replace(/\\/g, '/');
@@ -2799,9 +2802,6 @@ const handleLocalGatewayRequest = async (req, res, fallbackReason = '') => {
         } catch (err) {
             log(`[AMF DECODE MISS] target=${envelope.messages[0].target} error=${err.message}`);
         }
-    }
-    if ((method.endsWith('Login') || method.endsWith('Login2')) && !isDevCredentials(req.body)) {
-        log(`[DEV LOGIN] accepting local dev login as ${DEV_USERNAME}/${DEV_PASSWORD}`);
     }
     try {
         const result = await getAmfResultForMethod(method, decodedArgs);
