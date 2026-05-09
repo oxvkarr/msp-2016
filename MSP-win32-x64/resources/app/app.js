@@ -1239,6 +1239,23 @@ const sendSoapResult = (res, action, resultXml) => {
     res.send(soapEnvelope(action, resultXml));
 };
 
+const soapStringValues = (req) => {
+    const body = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
+    return [...body.matchAll(/<string[^>]*>([^<]*)<\/string>/gi)]
+        .map((match) => match[1])
+        .filter(Boolean);
+};
+
+const soapAppSettingsXml = (keys = []) => {
+    const requested = keys.length > 0 ? keys : Object.keys(appSettingDefaults);
+    const items = requested.map((name) => {
+        const safeName = xmlEscape(name);
+        const safeValue = xmlEscape(appSettingValue(name));
+        return `<AppSetting><name>${safeName}</name><value>${safeValue}</value><Name>${safeName}</Name><Value>${safeValue}</Value></AppSetting>`;
+    }).join('');
+    return `<GetAppSettingsResult>${items}</GetAppSettingsResult>`;
+};
+
 const userServiceWsdl = `<?xml version="1.0" encoding="utf-8"?>
 <definitions xmlns="http://schemas.xmlsoap.org/wsdl/" xmlns:tns="http://moviestarplanet.com/" targetNamespace="http://moviestarplanet.com/">
   <service name="UserService">
@@ -1256,6 +1273,10 @@ app.all(/^\/+WebService\/User\/UserService\.asmx$/i, (req, res) => {
         return;
     }
 
+    if (/GetAppSettings/i.test(action)) {
+        sendSoapResult(res, 'GetAppSettings', soapAppSettingsXml(soapStringValues(req)));
+        return;
+    }
     if (/GetIPLoginType/i.test(action)) {
         sendSoapResult(res, 'GetIPLoginType', '<GetIPLoginTypeResult>0</GetIPLoginTypeResult>');
         return;
