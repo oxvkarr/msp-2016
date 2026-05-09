@@ -2253,6 +2253,7 @@ const genericWriteResult = (method, leaf) => {
 };
 
 const shouldUseAmf3 = (method, result) => {
+    if (method.endsWith('Login') || method.endsWith('Login2')) return false;
     if (result && typeof result === 'object' && result.__class) return true;
     return /Login|LoadDataForRegisterNewUser|LoadActorDetails|UserSession|UserService|MovieStar|Shopping|Shop|Spending|Profile|Friend|Movie|Look|News|Quest|Gift|Admin|Payment|Messaging|Room|Inventory|Wardrobe|Logging/i.test(method);
 };
