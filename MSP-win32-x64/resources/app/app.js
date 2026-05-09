@@ -2061,11 +2061,12 @@ const loginHash = (status) => {
 
 const loginStatus2 = (actorRecord = null) => {
     const status = loginStatus(actorRecord);
-    loginHash(status);
+    const hash = loginHash(status);
     const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
     return typed('com.moviestarplanet.valueObjects.LoginStatus2', {
         loginStatus: status,
-        hDetails
+        hDetails,
+        hash
     });
 };
 
@@ -2079,7 +2080,8 @@ const invalidLoginStatus2 = () => {
     status.ticket = '';
     return typed('com.moviestarplanet.valueObjects.LoginStatus2', {
         loginStatus: status,
-        hDetails: ''
+        hDetails: '',
+        hash: ''
     });
 };
 
