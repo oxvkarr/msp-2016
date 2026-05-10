@@ -1037,6 +1037,20 @@ const registrationAssetAlias = (cleanPath) => {
     if (normalized === 'swf/footwear/shoes_male.swf') {
         return 'swf/world/shopicons/shoes_male.swf';
     }
+    const dragonboneEyeMatch = normalized.match(/^swf\/faceparts\/eyes\/([^/]+)\/texture\.swf$/);
+    if (dragonboneEyeMatch) {
+        return `swf/dragonbone_faceparts/eyes/${dragonboneEyeMatch[1]}/texture.swf`;
+    }
+    const dragonboneEyeShadowMatch = normalized.match(/^swf\/faceparts\/eyeshadow\/([^/]+)\/texture\.swf$/);
+    if (dragonboneEyeShadowMatch) {
+        return `swf/dragonbone_faceparts/eyeshadow/${dragonboneEyeShadowMatch[1]}/texture.swf`;
+    }
+    if (normalized === 'swf/faceparts/noses/nose.swf') {
+        return 'swf/world/shopicons/nose.swf';
+    }
+    if (normalized === 'swf/faceparts/mouths/mouth.swf') {
+        return 'swf/world/shopicons/mouth.swf';
+    }
     if (/^swf\/tops\//.test(normalized)) {
         return /(?:boy|male|_mf|maletop)/.test(normalized) ? 'swf/world/shopicons/tops_male.swf' : 'swf/world/shopicons/tops.swf';
     }
@@ -1647,23 +1661,14 @@ const registerFlagForGender = (gender) => {
 
 const facePart = (className, idField, id, swf, colors = '', regNewUser = REG_NEW_USER_UNISEX) => typed(className, {
     [idField]: id,
-    [`_${idField}`]: id,
     Id: id,
     id,
     SWF: swf,
-    _SWF: swf,
-    DragonBone: swf.replace(/\/texture\.swf$/i, ''),
-    _DragonBone: swf.replace(/\/texture\.swf$/i, ''),
-    SWFLocation: swf,
-    _SWFLocation: swf,
+    DragonBone: false,
     SkinId: 0,
-    _SkinId: 0,
     DefaultColors: colors,
-    _DefaultColors: colors,
     RegNewUser: regNewUser,
-    _RegNewUser: regNewUser,
     sortorder: id,
-    _sortorder: id,
     hidden: false,
     initialAnimation: ''
 });
@@ -1832,22 +1837,22 @@ const registerNewUserData = () => {
     const rels = starterClothes();
     return typed(REGISTER_NEW_USER_DATA_ALIAS, {
     eyes: [
-        facePart('Eye', 'EyeId', 1, 'swf/dragonbone_faceparts/eyes/eyes_girlnextdoor_2013/texture.swf', '0x5b351c'),
-        facePart('Eye', 'EyeId', 2, 'swf/dragonbone_faceparts/eyes/eyes_boynextdoor_2013/texture.swf', '0x5b351c'),
-        facePart('Eye', 'EyeId', 3, 'swf/dragonbone_faceparts/eyes/eyes_moviestar_2013/texture.swf', '0x3a6eb5'),
-        facePart('Eye', 'EyeId', 4, 'swf/dragonbone_faceparts/eyes/eyes_theman_2013/texture.swf', '0x2d251c')
+        facePart('Eye', 'EyeId', 1, 'eyes_girlnextdoor_2013/texture', '0x5b351c'),
+        facePart('Eye', 'EyeId', 2, 'eyes_boynextdoor_2013/texture', '0x5b351c'),
+        facePart('Eye', 'EyeId', 3, 'eyes_moviestar_2013/texture', '0x3a6eb5'),
+        facePart('Eye', 'EyeId', 4, 'eyes_theman_2013/texture', '0x2d251c')
     ],
     noses: [
-        facePart('Nose', 'NoseId', 1, 'swf/world/shopicons/nose.swf'),
-        facePart('Nose', 'NoseId', 2, 'swf/world/shopicons/nose.swf')
+        facePart('Nose', 'NoseId', 1, 'nose'),
+        facePart('Nose', 'NoseId', 2, 'nose')
     ],
     mouths: [
-        facePart('Mouth', 'MouthId', 1, 'swf/world/shopicons/mouth.swf', '0xd45a6a'),
-        facePart('Mouth', 'MouthId', 2, 'swf/world/shopicons/mouth.swf', '0xb64254')
+        facePart('Mouth', 'MouthId', 1, 'mouth', '0xd45a6a'),
+        facePart('Mouth', 'MouthId', 2, 'mouth', '0xb64254')
     ],
     eyeShadows: [
-        facePart('EyeShadow', 'EyeShadowId', 0, 'swf/dragonbone_faceparts/eyeshadow/eyeshadow_femalestar_2013/texture.swf', '0xffffff'),
-        facePart('EyeShadow', 'EyeShadowId', 1, 'swf/dragonbone_faceparts/eyeshadow/eyeshadow_party_2013/texture.swf', '0x333333')
+        facePart('EyeShadow', 'EyeShadowId', 0, 'eyeshadow_femalestar_2013/texture', '0xffffff'),
+        facePart('EyeShadow', 'EyeShadowId', 1, 'eyeshadow_party_2013/texture', '0x333333')
     ],
     clothes: clothItems(rels)
     });
