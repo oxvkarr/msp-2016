@@ -1061,15 +1061,6 @@ const registrationAssetAlias = (cleanPath) => {
     if (dragonboneEyeShadowMatch) {
         return `swf/dragonbone_faceparts/eyeshadow/${dragonboneEyeShadowMatch[1]}/texture.swf`;
     }
-    if (normalized === 'swf/faceparts/noses/nose.swf') {
-        return 'swf/world/shopicons/nose.swf';
-    }
-    if (normalized === 'swf/faceparts/noses/eyeid.swf') {
-        return 'swf/world/shopicons/nose.swf';
-    }
-    if (normalized === 'swf/faceparts/mouths/mouth.swf') {
-        return 'swf/world/shopicons/mouth.swf';
-    }
     if (/^swf\/tops\//.test(normalized)) {
         return /(?:boy|male|_mf|maletop)/.test(normalized) ? 'swf/world/shopicons/tops_male.swf' : 'swf/world/shopicons/tops.swf';
     }
@@ -1081,7 +1072,7 @@ const registrationAssetAlias = (cleanPath) => {
 
 const legacyMspAssetCandidates = (cleanPath, query) => {
     const normalized = decodeURIComponent(String(cleanPath || '')).replace(/\\/g, '/').toLowerCase();
-    if (!/^swf\/animations\/.+\.swf$/.test(normalized)) {
+    if (!/^swf\/(?:animations|faceparts)\/.+\.swf$/.test(normalized)) {
         return [];
     }
     return [
@@ -1903,12 +1894,12 @@ const registerNewUserData = () => {
         facePart('Eye', 'EyeId', 4, 'eyes_theman_2013/texture', '0x2d251c')
     ],
     noses: [
-        facePart('Nose', 'NoseId', 1, 'nose'),
-        facePart('Nose', 'NoseId', 2, 'nose')
+        facePart('Nose', 'NoseId', 1, 'nose_1', '', REG_NEW_USER_FEMALE),
+        facePart('Nose', 'NoseId', 4, 'nose_3', '', REG_NEW_USER_MALE)
     ],
     mouths: [
-        facePart('Mouth', 'MouthId', 1, 'mouth', '0xd45a6a'),
-        facePart('Mouth', 'MouthId', 2, 'mouth', '0xb64254')
+        facePart('Mouth', 'MouthId', 1, 'female_mouth_1', 'skincolor,0xd45a6a', REG_NEW_USER_FEMALE),
+        facePart('Mouth', 'MouthId', 4, 'male_mouth_1', 'skincolor,0xb64254', REG_NEW_USER_MALE)
     ],
     eyeShadows: [
         facePart('EyeShadow', 'EyeShadowId', 0, 'eyeshadow_femalestar_2013/texture', '0xffffff'),
