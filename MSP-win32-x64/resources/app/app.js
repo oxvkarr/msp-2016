@@ -2093,7 +2093,7 @@ const makeLoginStatus = (className, postLoginSeq = postLoginSequence(), actorRec
 
 const loginStatus = (actorRecord = null) => makeLoginStatus('com.moviestarplanet.valueObjects.LoginStatus', postLoginSequence(), actorRecord);
 const serviceLoginStatus = (actorRecord = null) => {
-    const { __class, ...status } = makeLoginStatus('', null, actorRecord);
+    const status = makeLoginStatus('com.moviestarplanet.services.userservice.valueObjects.LoginStatus', null, actorRecord);
     status.mutedUntil = null;
     status.helpMessage = '';
     status.amsHash = '';
@@ -2128,7 +2128,7 @@ const loginStatus2 = (actorRecord = null, useServiceTypes = false) => {
         hDetails,
         hash
     };
-    return useServiceTypes ? payload : typed('com.moviestarplanet.valueObjects.LoginStatus2', payload);
+    return typed(useServiceTypes ? 'com.moviestarplanet.services.userservice.valueObjects.LoginStatus2' : 'com.moviestarplanet.valueObjects.LoginStatus2', payload);
 };
 
 const invalidLoginStatus2 = (useServiceTypes = false) => {
@@ -2144,7 +2144,7 @@ const invalidLoginStatus2 = (useServiceTypes = false) => {
         hDetails: '',
         hash: ''
     };
-    return useServiceTypes ? payload : typed('com.moviestarplanet.valueObjects.LoginStatus2', payload);
+    return typed(useServiceTypes ? 'com.moviestarplanet.services.userservice.valueObjects.LoginStatus2' : 'com.moviestarplanet.valueObjects.LoginStatus2', payload);
 };
 
 const invalidLoginStatus = () => {
