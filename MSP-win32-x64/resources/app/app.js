@@ -20,6 +20,7 @@ const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || '';
 const mongoDbName = process.env.MONGODB_DB || 'msp_2016';
 const mongoStateCollection = process.env.MONGODB_STATE_COLLECTION || 'state';
 const defaultRemoteAssetBaseUrl = 'https://pub-2ec8e3c2f0a24e46ab1defac06482eb3.r2.dev';
+const legacyMspAssetBaseUrl = 'http://cdn.moviestarplanet.com';
 const defaultRemoteGatewayUrl = 'https://msp-2016.onrender.com';
 const remoteAssetBaseUrl = (process.env.REMOTE_ASSET_BASE_URL || defaultRemoteAssetBaseUrl).replace(/\/+$/, '');
 const remoteAssetCacheEnabled = process.env.REMOTE_ASSET_CACHE !== '0';
@@ -1078,6 +1079,30 @@ const registrationAssetAlias = (cleanPath) => {
     return null;
 };
 
+const legacyMspAssetCandidates = (cleanPath, query) => {
+    const normalized = decodeURIComponent(String(cleanPath || '')).replace(/\\/g, '/').toLowerCase();
+    if (!/^swf\/animations\/.+\.swf$/.test(normalized)) {
+        return [];
+    }
+    return [
+        `${legacyMspAssetBaseUrl}/${cleanPath}${query}`,
+        `${legacyMspAssetBaseUrl}/${encodeURI(decodeURIComponent(cleanPath)).replace(/%2F/gi, '/')}${query}`,
+        `${legacyMspAssetBaseUrl}/${cleanPath.toLowerCase()}${query}`
+    ];
+};
+
+const isLikelyBadAnimationCache = (cleanPath, filePath) => {
+    const normalized = decodeURIComponent(String(cleanPath || '')).replace(/\\/g, '/').toLowerCase();
+    if (!/^swf\/animations\/.+\.swf$/.test(normalized)) {
+        return false;
+    }
+    try {
+        return fs.statSync(filePath).size < 4096;
+    } catch (_) {
+        return false;
+    }
+};
+
 const serveRemoteAsset = async (req, res, cleanPath) => {
     if (!remoteAssetBaseUrl || !remoteAssetExtensions.has(path.extname(cleanPath).toLowerCase())) {
         return false;
@@ -1086,6 +1111,7 @@ const serveRemoteAsset = async (req, res, cleanPath) => {
         return false;
     }
 
+    const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
     const aliasPath = registrationAssetAlias(cleanPath);
     const cachePath = aliasPath || cleanPath;
     const cachedPath = path.join(assetCachePath, cachePath);
@@ -1103,14 +1129,18 @@ const serveRemoteAsset = async (req, res, cleanPath) => {
         }
         for (const candidatePath of cacheCandidates) {
             if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()) {
+                if (isLikelyBadAnimationCache(cleanPath, candidatePath)) {
+                    log(`[REMOTE ASSET CACHE BAD] ${req.url} -> ${candidatePath}`);
+                    continue;
+                }
                 res.type(contentTypeFor(candidatePath)).sendFile(candidatePath);
                 return true;
             }
         }
     }
 
-    const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
     const candidates = [
+        ...legacyMspAssetCandidates(cleanPath, query),
         ...(aliasPath ? [
             `${remoteAssetBaseUrl}/${aliasPath}${query}`,
             `${remoteAssetBaseUrl}/${aliasPath.toLowerCase()}${query}`
