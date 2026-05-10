@@ -1025,9 +1025,6 @@ const warmRemoteGateway = () => new Promise((resolve) => {
 
 const registrationAssetAlias = (cleanPath) => {
     const normalized = decodeURIComponent(String(cleanPath || '')).replace(/\\/g, '/').toLowerCase();
-    if (/^swf\/animations\/(?:girl|boy)\s+pose\.swf$/.test(normalized)) {
-        return 'swf/animationtest.swf';
-    }
     if (normalized === 'swf/hair/hair.swf') {
         return 'swf/world/shopicons/hair.swf';
     }
