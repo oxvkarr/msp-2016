@@ -31,9 +31,10 @@ const realMspGatewayUrl = `https://ws-${realMspServer}.mspapis.com/Gateway.aspx`
 const isDebugMode = process.env.MSP_DEBUG === '1';
 const isServerOnly = process.env.MSP_SERVER_ONLY === '1' || process.argv.includes('--server');
 const useRemoteGateway = Boolean(remoteGatewayUrl) && !isServerOnly;
+const isCreateNewUserMethod = (method) => /MovieStarPlanet\.WebService\.User\.(AMFUserServiceWeb|AMFUserService)\.(CreateNewUser|CreateNewUserOld)$/i.test(method || '');
 const shouldProxyRemoteGateway = (method) => {
     if (!useRemoteGateway) return false;
-    return /MovieStarPlanet\.WebService\.User\.(AMFUserServiceWeb|AMFUserService)\.(CreateNewUser|CreateNewUserOld)$/i.test(method || '');
+    return isCreateNewUserMethod(method);
 };
 const configuredPort = process.env.PORT || process.env.MSP_PORT || '';
 const normalizeLocaleCode = (value) => {
