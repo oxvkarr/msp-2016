@@ -1496,6 +1496,7 @@ const ACTOR_DETAILS_ALIAS = 'MovieStarPlanet.DBML.ActorDetails';
 const ACTOR_PERSONAL_INFO_ALIAS = 'MovieStarPlanet.DBML.ActorPersonalInfo';
 const ACTOR_STATUS_ALIAS = 'MovieStarPlanet.DBML.ActorStatus';
 const COMBAT_CATEGORISATION_ALIAS = 'MovieStarPlanet.Model.Combat.ValueObjects.CombatCategorisation';
+const CREATE_NEW_USER_STATUS_ALIAS = 'MovieStarPlanet.WebService.User.UserService+CreateNewUserStatus';
 
 const amf0Amf3Value = (value) => Buffer.concat([Buffer.from([0x11]), amf3Value(value)]);
 
@@ -2156,48 +2157,23 @@ const invalidLoginStatus = () => {
 
 const createNewUserStatus = (actorRecord = null) => {
     const actor = actorDefaults(actorRecord);
-    return typed('com.moviestarplanet.services.userservice.valueObjects.CreateNewUserStatus', {
-    status: 'Created',
-    Status: 'Created',
-    success: true,
-    Success: true,
-    actorId: actor.actorId,
-    ActorId: actor.actorId,
-    actorName: actor.name,
-    ActorName: actor.name,
-    actorDetails: devActorDetails(actorRecord),
-    ActorDetails: devActorDetails(actorRecord),
-    loginStatus: serviceLoginStatus(actorRecord),
-    LoginStatus: serviceLoginStatus(actorRecord),
-    loginStatus2: loginStatus2(actorRecord),
-    LoginStatus2: loginStatus2(actorRecord),
-    newActorCreationData: typed('MovieStarPlanet.WebService.User.ValueObjects.NewActorCreationData', {
-        ActorId: actor.actorId,
-        Name: actor.name,
-        SkinSWF: actor.skinSWF,
-        SkinColor: actor.skinColor,
-        EyeId: actor.eyeId,
-        NoseId: actor.noseId,
-        MouthId: actor.mouthId,
-        Clothes: starterClothes().slice(0, 6),
-        ActorClothesRels: starterClothes().slice(0, 6)
-    }),
-    errorCode: 0,
-    ErrorCode: 0,
-    message: '',
-    Message: ''
-});
+    return typed(CREATE_NEW_USER_STATUS_ALIAS, {
+        actor: devActorDetails(actorRecord, false),
+        hDetails: crypto.createHash('md5').update(`wiurh2i${actor.actorId}`, 'utf8').digest('hex'),
+        adCountryMap: [],
+        ticket: `local-${actor.name}-ticket${crypto.randomBytes(8).toString('hex')}`,
+        amsHash: '',
+        features: []
+    });
 };
 
-const createNewUserError = (message, errorCode = 1) => typed('com.moviestarplanet.services.userservice.valueObjects.CreateNewUserStatus', {
-    status: 'Error',
-    Status: 'Error',
-    success: false,
-    Success: false,
-    errorCode,
-    ErrorCode: errorCode,
-    message,
-    Message: message
+const createNewUserError = (actorId = -2) => typed(CREATE_NEW_USER_STATUS_ALIAS, {
+    actor: typed(ACTOR_DETAILS_ALIAS, { ActorId: actorId }),
+    hDetails: '',
+    adCountryMap: [],
+    ticket: '',
+    amsHash: '',
+    features: []
 });
 
 const APP_SETTING_ALIAS = 'MovieStarPlanet.WebService.User.UserService+AppSetting';
@@ -2292,28 +2268,14 @@ const createAccountFromArgs = async (args = []) => {
     const cleanUsername = String(username || '').trim();
 
     if (!/^[a-zA-Z0-9_.-]{3,20}$/.test(cleanUsername)) {
-        return createNewUserError('Invalid username', 2);
+        return createNewUserError(-1);
     }
     if (findUserByName(cleanUsername)) {
-        return createNewUserError('Username already exists', 3);
+        return createNewUserError(-2);
     }
 
     const actorId = nextActorId();
-    const actor = {
-        actorId,
-        name: cleanUsername,
-        level: 1,
-        money: 5000,
-        diamonds: 100,
-        fame: 0,
-        fortune: 0,
-        skinSWF: 'swf/skins/maleskin.swf',
-        skinColor: '0xffd1b3',
-        eyeId: 2,
-        noseId: 1,
-        mouthId: 1,
-        createdAt: new Date().toISOString()
-    };
+    const actor = actorFromCreateArgs(args, actorId, cleanUsername);
     const user = {
         id: actorId,
         username: cleanUsername,
@@ -2563,10 +2525,40 @@ const credentialsFromArgs = (args = []) => {
     if (typeof args[0] === 'string' && typeof args[1] === 'string') {
         return { username: args[0].trim(), password: args[1] };
     }
+    if (args[0] && typeof args[0] === 'object') {
+        const newActor = args[0];
+        if (newActor.ChosenActorName || newActor.ChosenPassword) {
+            return {
+                username: String(newActor.ChosenActorName || '').trim(),
+                password: String(newActor.ChosenPassword || '')
+            };
+        }
+    }
     const strings = usefulCredentialStrings(args);
     return {
         username: strings[0] || `player${Date.now()}`,
         password: strings[1] || crypto.randomBytes(8).toString('hex')
+    };
+};
+
+const actorFromCreateArgs = (args = [], actorId, name) => {
+    const newActor = args[0] && typeof args[0] === 'object' ? args[0] : {};
+    return {
+        actorId,
+        name,
+        level: 1,
+        money: 5000,
+        diamonds: 100,
+        fame: 0,
+        fortune: 0,
+        skinSWF: newActor.SkinIsMale === false ? 'swf/skins/femaleskin.swf' : 'swf/skins/maleskin.swf',
+        skinColor: newActor.SkinColor || '0xffd1b3',
+        eyeId: Number(newActor.EyeId) || 2,
+        eyeColors: newActor.EyeColors || '0x5b351c',
+        noseId: Number(newActor.NoseId) || 1,
+        mouthId: Number(newActor.MouthId) || 1,
+        mouthColors: newActor.MouthColors || '0xd45a6a',
+        createdAt: new Date().toISOString()
     };
 };
 
@@ -2867,7 +2859,7 @@ const handleLocalGatewayRequest = async (req, res, fallbackReason = '') => {
     }
     try {
         const result = await getAmfResultForMethod(method, decodedArgs);
-        const useLegacyEncoder = method === 'MovieStarPlanet.WebService.User.AMFUserServiceWeb.Login';
+        const useLegacyEncoder = method === 'MovieStarPlanet.WebService.User.AMFUserServiceWeb.Login' || isCreateNewUserMethod(method);
         const responseBody = buildAmfResponse(envelope ? envelope.version : 0, responseUri, result, {
             amf3: shouldUseAmf3(method, result),
             debugLabel: method,
