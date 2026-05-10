@@ -1940,7 +1940,16 @@ const makePostLoginSequence = (className) => typed(className, {
 });
 
 const postLoginSequence = () => makePostLoginSequence('com.moviestarplanet.valueObjects.PostLoginSequenceDomain');
-const servicePostLoginSequence = () => makePostLoginSequence('com.moviestarplanet.services.userservice.valueObjects.PostLoginSequenceDomain');
+const servicePostLoginSequence = () => typed('com.moviestarplanet.services.userservice.valueObjects.PostLoginSequenceDomain', {
+    ShowCampaign: false,
+    ShowVipRebuy: false,
+    ShowFameLevelConvert: false,
+    DailyBonusType: 0,
+    AnchorFriendshipAccepted: false,
+    AnchorGiftsGiven: 0,
+    Features: [],
+    SpecialOffer: null
+});
 
 const loginActorPersonalInfo = () => typed('com.moviestarplanet.usersession.valueobjects.ActorPersonalInfo', {
     ActorId: DEV_ACTOR_ID,
