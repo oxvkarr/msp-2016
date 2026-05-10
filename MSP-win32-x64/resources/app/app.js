@@ -1025,6 +1025,21 @@ const warmRemoteGateway = () => new Promise((resolve) => {
 
 const registrationAssetAlias = (cleanPath) => {
     const normalized = decodeURIComponent(String(cleanPath || '')).replace(/\\/g, '/').toLowerCase();
+    if (normalized === 'swf/tops/nickelodeon_spotlight_girlstop_fj.swf') {
+        return 'swf/stuff/nickelodeon_spotlight_girlstop_fj.swf';
+    }
+    if (normalized === 'swf/tops/nickelodeon_spotlight_boystop_fj.swf') {
+        return 'swf/stuff/nickelodeon_spotlight_boystop_fj.swf';
+    }
+    if (normalized === 'swf/tops/birthdaycampaign_2013_boystop_ms_mf.swf') {
+        return 'swf/stuff/birthdaycampaign_2013_boystop_ms_mf.swf';
+    }
+    if (normalized === 'swf/tops/cindarella whipped cream overwhelming disney dress.swf') {
+        return 'swf/stuff/cindarella whipped cream overwhelming disney dress.swf';
+    }
+    if (normalized === 'swf/bottoms/nickelodeon_2015_maletopred_mf.swf') {
+        return 'swf/stuff/nickelodeon_2015_maletopred_mf.swf';
+    }
     if (normalized === 'swf/hair/hair.swf') {
         return 'swf/world/shopicons/hair.swf';
     }
@@ -1046,6 +1061,9 @@ const registrationAssetAlias = (cleanPath) => {
         return `swf/dragonbone_faceparts/eyeshadow/${dragonboneEyeShadowMatch[1]}/texture.swf`;
     }
     if (normalized === 'swf/faceparts/noses/nose.swf') {
+        return 'swf/world/shopicons/nose.swf';
+    }
+    if (normalized === 'swf/faceparts/noses/eyeid.swf') {
         return 'swf/world/shopicons/nose.swf';
     }
     if (normalized === 'swf/faceparts/mouths/mouth.swf') {
@@ -1076,21 +1094,22 @@ const serveRemoteAsset = async (req, res, cleanPath) => {
         return false;
     }
 
-    const cachedPath = path.join(assetCachePath, cleanPath);
+    const aliasPath = registrationAssetAlias(cleanPath);
+    const cachePath = aliasPath || cleanPath;
+    const cachedPath = path.join(assetCachePath, cachePath);
     if (remoteAssetCacheEnabled && fs.existsSync(cachedPath) && fs.statSync(cachedPath).isFile()) {
         res.type(contentTypeFor(cachedPath)).sendFile(cachedPath);
         return true;
     }
 
     const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
-    const aliasPath = registrationAssetAlias(cleanPath);
     const candidates = [
-        `${remoteAssetBaseUrl}/${cleanPath}${query}`,
-        `${remoteAssetBaseUrl}/${cleanPath.toLowerCase()}${query}`,
         ...(aliasPath ? [
             `${remoteAssetBaseUrl}/${aliasPath}${query}`,
             `${remoteAssetBaseUrl}/${aliasPath.toLowerCase()}${query}`
-        ] : [])
+        ] : []),
+        `${remoteAssetBaseUrl}/${cleanPath}${query}`,
+        `${remoteAssetBaseUrl}/${cleanPath.toLowerCase()}${query}`
     ];
 
     for (const remoteUrl of candidates) {
@@ -1660,17 +1679,21 @@ const registerFlagForGender = (gender) => {
 };
 
 const facePart = (className, idField, id, swf, colors = '', regNewUser = REG_NEW_USER_UNISEX) => typed(className, {
-    [idField]: id,
-    Id: id,
-    id,
     SWF: swf,
+    DiamondsPrice: 0,
+    Name: '',
+    Price: 0,
+    Vip: 0,
     DragonBone: false,
+    Discount: 0,
+    isNew: 0,
+    sortorder: id,
+    RegNewUser: regNewUser,
     SkinId: 0,
     DefaultColors: colors,
-    RegNewUser: regNewUser,
-    sortorder: id,
     hidden: false,
-    initialAnimation: ''
+    lastNewTagDate: null,
+    [idField]: id
 });
 
 const cloth = (id, swf, filename, clothesCategoryId, gender, colors = '') => {
@@ -2890,7 +2913,7 @@ const handleLocalGatewayRequest = async (req, res, fallbackReason = '') => {
     }
     try {
         const result = await getAmfResultForMethod(method, decodedArgs);
-        const useLegacyEncoder = method === 'MovieStarPlanet.WebService.User.AMFUserServiceWeb.Login' || isCreateNewUserMethod(method);
+        const useLegacyEncoder = method === 'MovieStarPlanet.WebService.User.AMFUserServiceWeb.Login' || method.endsWith('LoadDataForRegisterNewUser') || isCreateNewUserMethod(method);
         const responseBody = buildAmfResponse(envelope ? envelope.version : 0, responseUri, result, {
             amf3: shouldUseAmf3(method, result),
             debugLabel: method,
