@@ -1940,7 +1940,7 @@ const makePostLoginSequence = (className) => typed(className, {
 });
 
 const postLoginSequence = () => makePostLoginSequence('com.moviestarplanet.valueObjects.PostLoginSequenceDomain');
-const servicePostLoginSequence = () => typed('com.moviestarplanet.services.userservice.valueObjects.PostLoginSequenceDomain', {
+const servicePostLoginSequence = () => ({
     ShowCampaign: false,
     ShowVipRebuy: false,
     ShowFameLevelConvert: false,
@@ -2006,8 +2006,6 @@ const loginActorDetails = (actorRecord = null) => {
     NumberOfAutographsGiven: 0,
     TimeOfLastAutographGiven: null,
     FacebookId: '',
-    BoyfriendId: 0,
-    BoyfriendStatus: 0,
     MembershipPurchasedDate: new Date(),
     MembershipTimeoutDate: new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000),
     MembershipGiftRecievedDate: null,
@@ -2036,15 +2034,44 @@ const loginActorDetails = (actorRecord = null) => {
     AllowCommunication: 1,
     Diamonds: actor.diamonds,
     PopUpStyleId: 0,
+    VipTier: 0,
+    EyeShadowId: 0,
+    EyeShadowColors: '',
     BoyFriend: null,
     ActorPersonalInfo: loginActorPersonalInfo(),
-    ActorRelationships: []
+    ActorRelationships: [],
+    ActorStatus: typed('com.moviestarplanet.usersession.valueobjects.ActorStatus', {
+        ActorId: actor.actorId,
+        SoundMute: false,
+        CampaignViewed: 0,
+        MobileStartAward: 0,
+        FameLevelConvert: false,
+        NotificationActive: false,
+        PhotoShareRulesAccepted: true,
+        ArtbookShareRulesAccepted: true,
+        LogOutWhenClickingExternalAppLinkAccepted: true,
+        AnchorFriendshipAccepted: false,
+        AnchorGiftsGiven: 0,
+        ThirdPartyCreation: false,
+        PreviousLoginDate: new Date()
+    }),
+    CombatCategorisation: typed('com.moviestarplanet.combat.valueobject.CombatCategorisation', {
+        ActorId: actor.actorId,
+        Category: '',
+        Level: 0,
+        DurationMinutes: 0,
+        CombatAction: 0,
+        CombatModerator: 0,
+        DateCreated: null,
+        DateProcessed: null
+    }),
+    RoomLikes: 0
 });
 };
 
 const makeLoginStatus = (className, postLoginSeq = postLoginSequence(), actorRecord = null) => typed(className, {
     status: 'Success',
-    actor: devActorDetails(actorRecord, false),
+    actor: loginActorDetails(actorRecord),
     statusDetails: '',
     actorLocale: [],
     lbs: [],
@@ -2061,8 +2088,7 @@ const makeLoginStatus = (className, postLoginSeq = postLoginSequence(), actorRec
 
 const loginStatus = (actorRecord = null) => makeLoginStatus('com.moviestarplanet.valueObjects.LoginStatus', postLoginSequence(), actorRecord);
 const serviceLoginStatus = (actorRecord = null) => {
-    const status = makeLoginStatus('com.moviestarplanet.services.userservice.valueObjects.LoginStatus', servicePostLoginSequence(), actorRecord);
-    status.lbse = status.lbs;
+    const { __class, ...status } = makeLoginStatus('', servicePostLoginSequence(), actorRecord);
     status.mutedUntil = null;
     status.helpMessage = '';
     status.amsHash = '';
@@ -2092,11 +2118,12 @@ const loginStatus2 = (actorRecord = null, useServiceTypes = false) => {
     const status = useServiceTypes ? serviceLoginStatus(actorRecord) : loginStatus(actorRecord);
     const hash = loginHash(status);
     const hDetails = crypto.createHash('md5').update(`wiurh2i${status.actor.ActorId}`, 'utf8').digest('hex');
-    return typed(useServiceTypes ? 'com.moviestarplanet.services.userservice.valueObjects.LoginStatus2' : 'com.moviestarplanet.valueObjects.LoginStatus2', {
+    const payload = {
         loginStatus: status,
         hDetails,
         hash
-    });
+    };
+    return useServiceTypes ? payload : typed('com.moviestarplanet.valueObjects.LoginStatus2', payload);
 };
 
 const invalidLoginStatus2 = (useServiceTypes = false) => {
@@ -2107,11 +2134,12 @@ const invalidLoginStatus2 = (useServiceTypes = false) => {
     status.actorLocale = [];
     status.lbs = [];
     status.ticket = '';
-    return typed(useServiceTypes ? 'com.moviestarplanet.services.userservice.valueObjects.LoginStatus2' : 'com.moviestarplanet.valueObjects.LoginStatus2', {
+    const payload = {
         loginStatus: status,
         hDetails: '',
         hash: ''
-    });
+    };
+    return useServiceTypes ? payload : typed('com.moviestarplanet.valueObjects.LoginStatus2', payload);
 };
 
 const invalidLoginStatus = () => {
