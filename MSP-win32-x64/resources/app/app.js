@@ -1078,11 +1078,6 @@ const registrationAssetAlias = (cleanPath) => {
     return null;
 };
 
-const isRegisterPoseAnimation = (cleanPath) => {
-    const normalized = decodeURIComponent(String(cleanPath || '')).replace(/\\/g, '/').toLowerCase();
-    return /^swf\/animations\/(?:girl|boy)\s+pose\.swf$/.test(normalized);
-};
-
 const serveRemoteAsset = async (req, res, cleanPath) => {
     if (!remoteAssetBaseUrl || !remoteAssetExtensions.has(path.extname(cleanPath).toLowerCase())) {
         return false;
@@ -1090,16 +1085,28 @@ const serveRemoteAsset = async (req, res, cleanPath) => {
     if (!cleanPath || cleanPath.includes('..')) {
         return false;
     }
-    if (isRegisterPoseAnimation(cleanPath)) {
-        return false;
-    }
 
     const aliasPath = registrationAssetAlias(cleanPath);
     const cachePath = aliasPath || cleanPath;
     const cachedPath = path.join(assetCachePath, cachePath);
-    if (remoteAssetCacheEnabled && fs.existsSync(cachedPath) && fs.statSync(cachedPath).isFile()) {
-        res.type(contentTypeFor(cachedPath)).sendFile(cachedPath);
-        return true;
+    if (remoteAssetCacheEnabled) {
+        const cacheCandidates = [cachedPath];
+        if (!aliasPath) {
+            try {
+                const encodedCachePath = path.join(assetCachePath, encodeURI(decodeURIComponent(cleanPath)).replace(/%2F/gi, '/'));
+                if (encodedCachePath !== cachedPath) {
+                    cacheCandidates.push(encodedCachePath);
+                }
+            } catch (_) {
+                // Keep the original path when the URL is not decodable.
+            }
+        }
+        for (const candidatePath of cacheCandidates) {
+            if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()) {
+                res.type(contentTypeFor(candidatePath)).sendFile(candidatePath);
+                return true;
+            }
+        }
     }
 
     const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
