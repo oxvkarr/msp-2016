@@ -33,9 +33,12 @@ const isDebugMode = process.env.MSP_DEBUG === '1';
 const isServerOnly = process.env.MSP_SERVER_ONLY === '1' || process.argv.includes('--server');
 const useRemoteGateway = Boolean(remoteGatewayUrl) && !isServerOnly;
 const isCreateNewUserMethod = (method) => /MovieStarPlanet\.WebService\.User\.(AMFUserServiceWeb|AMFUserService)\.(CreateNewUser|CreateNewUserOld)$/i.test(method || '');
+// Dodajemy nową linię dla logowania:
+const isLoginMethod = (method) => /MovieStarPlanet\.WebService\.User\.(AMFUserServiceWeb|AMFUserService)\.Login$/i.test(method || '');
+
 const shouldProxyRemoteGateway = (method) => {
     if (!useRemoteGateway) return false;
-    return isCreateNewUserMethod(method);
+    return isCreateNewUserMethod(method) || isLoginMethod(method);
 };
 const configuredPort = process.env.PORT || process.env.MSP_PORT || '';
 const normalizeLocaleCode = (value) => {
@@ -438,15 +441,15 @@ const fallbackPlayHtml = (req) => {
     <script>
         (function () {
             var flashStub = function (name) {
-                return function () {
-                    try {
-                        console.log('[FLASH CALL] ' + name, Array.prototype.slice.call(arguments).join(' '));
-                    } catch (error) {
-                        console.log('[FLASH CALL] ' + name);
-                    }
-                    return null;
-                };
-            };
+    return function () {
+        try {
+            console.log('[FLASH CALL] ' + name, Array.prototype.slice.call(arguments).join(' '));
+        } catch (error) {
+            console.log('[FLASH CALL] ' + name);
+        }
+        return true;
+    };
+};
             [
                 'trackLogin',
                 'trackCreateNewUser',
@@ -465,6 +468,7 @@ const fallbackPlayHtml = (req) => {
                 'cleanUpOverlay',
                 'moveOverlay',
                 'loadOverlay'
+                
             ].forEach(function (name) {
                 if (typeof window[name] !== 'function') {
                     window[name] = flashStub(name);
@@ -641,9 +645,22 @@ const fallbackPlayHtml = (req) => {
                     return original.apply(console, arguments);
                 };
             });
-            window.onerror = function (message, source, line) {
-                write('ERROR', [message + ' @ ' + source + ':' + line]);
-            };
+window.onerror = function (message, source, line, column, error) {
+    write('ERROR', [
+        message + ' @ ' + source + ':' + line + ':' + column,
+        error && error.stack ? error.stack : ''
+    ]);
+};
+
+window.addEventListener('unhandledrejection', function (event) {
+    write('ERROR', ['Unhandled promise rejection', event.reason]);
+});
+setInterval(function () {
+    var movie = document.getElementById('msp');
+    if (movie) {
+        console.log('[MSP STATE] object exists');
+    }
+}, 5000);
             if (clear) clear.onclick = function () {
                 allLines = [];
                 counters = { req: 0, amf: 0, assets: 0 };
@@ -908,8 +925,14 @@ const proxyGatewayRequest = (req, res, method, fallbackHandler) => {
                 fallback(`remote status ${statusCode}`);
                 return;
             }
-            settled = true;
+                        settled = true;
             log(`[REMOTE GATEWAY OK] ${method || ''} status=${statusCode} bytes=${responseBody.length}`);
+
+            dumpAmfExchange(method, body, responseBody, {
+                responseUri: '/1',
+                remote: true
+            });
+
             res.status(statusCode);
             res.set('Content-Type', proxyRes.headers['content-type'] || 'application/x-amf');
             res.send(responseBody);
@@ -920,9 +943,11 @@ const proxyGatewayRequest = (req, res, method, fallbackHandler) => {
         log(`[REMOTE GATEWAY FAIL] ${targetUrl.toString()} ${err.message}`);
         fallback(err.message);
     });
+
     proxyReq.on('timeout', () => {
         proxyReq.destroy(new Error('Remote gateway timeout'));
     });
+
     proxyReq.end(body);
     log(`[REMOTE GATEWAY] ${method || ''} -> ${targetUrl.toString()}`);
     return true;
@@ -1041,7 +1066,7 @@ const registrationAssetAlias = (cleanPath) => {
     if (normalized === 'swf/bottoms/nickelodeon_2015_maletopred_mf.swf') {
         return 'swf/stuff/nickelodeon_2015_maletopred_mf.swf';
     }
-    if (normalized === 'swf/hair/hair.swf') {
+    if (normalized === 'swf/hair/hair_2.swf') {
         return 'swf/world/shopicons/hair.swf';
     }
     if (normalized === 'swf/hair/hair_male.swf') {
@@ -1813,17 +1838,22 @@ const withCollectionAliases = (data) => {
 };
 
 const starterClothes = () => [
-    cloth(9001, 'swf/world/shopicons/hair.swf', 'hair.swf', 1, 'Female', '0x6b3b18,0x8a5522'),
-    cloth(9002, 'swf/world/shopicons/hair_male.swf', 'hair_male.swf', 1, 'Male', '0x6b3b18,0x8a5522'),
-    cloth(1001, 'swf/stuff/nickelodeon_spotlight_girlstop_fj.swf', 'nickelodeon_spotlight_girlstop_fj.swf', 2, 'Female', '0xff66aa,0xffffff'),
-    cloth(1002, 'swf/stuff/nickelodeon_spotlight_boystop_fj.swf', 'nickelodeon_spotlight_boystop_fj.swf', 2, 'Male', '0x3366cc,0xffffff'),
-    cloth(1003, 'swf/stuff/birthdaycampaign_2013_boystop_ms_mf.swf', 'birthdaycampaign_2013_boystop_ms_mf.swf', 2, 'Male', '0x1e63aa,0xffffff'),
-    cloth(1004, 'swf/stuff/cindarella whipped cream overwhelming disney dress.swf', 'cindarella whipped cream overwhelming disney dress.swf', 2, 'Female', '0xffffff,0xbfe8ff'),
-    cloth(1005, 'swf/stuff/nickelodeon_2015_maletopred_mf.swf', 'nickelodeon_2015_maletopred_mf.swf', 3, 'Male', '0xcc3333,0xffffff'),
-    cloth(9003, 'swf/world/shopicons/bottoms.swf', 'bottoms.swf', 3, 'Female', '0x2454a6,0xffffff'),
-    cloth(9004, 'swf/world/shopicons/bottoms_male.swf', 'bottoms_male.swf', 3, 'Male', '0x2454a6,0xffffff'),
-    cloth(9005, 'swf/world/shopicons/shoes.swf', 'shoes.swf', 10, 'Female', '0x222222,0xffffff'),
-    cloth(9006, 'swf/world/shopicons/shoes_male.swf', 'shoes_male.swf', 10, 'Male', '0x222222,0xffffff')
+    cloth(1022, 'swf/hair', 'hair_6.swf', 1, 'Female'),
+    cloth(1021, 'swf/hair', 'hair_5.swf', 1, 'Female', '0xff9900,0x663366'),
+    cloth(1020, 'swf/hair', 'hair_4.swf', 1, 'Female'),
+    cloth(1005, 'swf/hair', 'hair_3.swf', 1, 'Male', '0xcc0000,0xff6600,0xffff00'),
+    cloth(1011, 'swf/tops', 't-shirt_2.swf', 2, 'Female', '0xff66cc,0x99ffcc,0x99ffcc,0xff66cc'),
+    cloth(1057, 'swf/tops', 'body armor top.swf', 2, 'Male', '0x666666'),
+    cloth(1055, 'swf/tops', 'camoflage jacket.swf', 2, 'Male', '0x003300'),
+    cloth(1036, 'swf/tops', 'top_2_Honey.swf', 2, 'Female', '0x666666,0xFF00CC'),
+    cloth(1054, 'swf/bottoms', 'Honey_bottoms_10.swf', 3, 'Female', '0x990099,0xffcc00,0xffff33'),
+    cloth(1052, 'swf/bottoms', 'Honey_bottoms_8.swf', 3, 'Female', '0xff0066,0xfeffff'),
+    cloth(1050, 'swf/bottoms', 'Honey_bottoms_6.swf', 3, 'Male', '0x6666cc,0xffffff'),
+    cloth(1002, 'swf/bottoms', 'long trousers_1.swf', 3, 'Male'),
+    cloth(1028, 'swf/footwear', 'shoes_1.swf', 10, 'Female', '0x6699cc,0x990000'),
+    cloth(1128, 'swf/footwear', 'shoes_1.swf', 10, 'Male', '0x6699cc,0x990000'),
+    cloth(1029, 'swf/footwear', 'shoes_2.swf', 10, 'Female'),
+    cloth(1129, 'swf/footwear', 'shoes_2.swf', 10, 'Male')
 ];
 
 const clothItem = (rel) => rel && (rel.Cloth || rel._Cloth || rel);
@@ -1888,14 +1918,14 @@ const registerNewUserData = () => {
     const rels = starterClothes();
     return typed(REGISTER_NEW_USER_DATA_ALIAS, {
     eyes: [
-        facePart('Eye', 'EyeId', 1, 'eyes_girlnextdoor_2013/texture', '0x5b351c'),
-        facePart('Eye', 'EyeId', 2, 'eyes_boynextdoor_2013/texture', '0x5b351c'),
-        facePart('Eye', 'EyeId', 3, 'eyes_moviestar_2013/texture', '0x3a6eb5'),
-        facePart('Eye', 'EyeId', 4, 'eyes_theman_2013/texture', '0x2d251c')
+        facePart('Eye', 'EyeId', 1, 'eyes_1', REG_NEW_USER_FEMALE),
+        facePart('Eye', 'EyeId', 2, 'male_eye1', REG_NEW_USER_MALE),
+        facePart('Eye', 'EyeId', 3, 'female_eyes_2011_2', REG_NEW_USER_FEMALE),
+        facePart('Eye', 'EyeId', 4, 'MaleEyes1', REG_NEW_USER_MALE)
     ],
     noses: [
-        facePart('Nose', 'NoseId', 1, 'nose_1', '', REG_NEW_USER_FEMALE),
-        facePart('Nose', 'NoseId', 4, 'nose_3', '', REG_NEW_USER_MALE)
+        facePart('Nose', 'NoseId', 1, 'nose_6',  REG_NEW_USER_FEMALE),
+        facePart('Nose', 'NoseId', 4, 'nose_4',  REG_NEW_USER_MALE)
     ],
     mouths: [
         facePart('Mouth', 'MouthId', 1, 'female_mouth_1', 'skincolor,0xd45a6a', REG_NEW_USER_FEMALE),
@@ -3020,7 +3050,15 @@ app.get('/api/health', (req, res) => {
         serverTime: new Date().toISOString()
     });
 });
-
+// Automatyczna naprawa brakujących szkieletów animacji (DragonBone)
+app.get('*.json', (req, res, next) => {
+    const fullPath = path.join(publicPath, req.path);
+    if (!fs.existsSync(fullPath) && req.path.includes('dragonbone')) {
+        log(`[FIX] Generuję pusty szkielet dla: ${req.url}`);
+        return res.json({}); // Zwraca pusty obiekt zamiast błędu 404
+    }
+    next();
+});
 app.use((req, res) => {
     log(`[MISS] ${req.method} ${req.url}`);
     res.status(404).type('text/plain').send(`Missing local file/route: ${req.url}`);
