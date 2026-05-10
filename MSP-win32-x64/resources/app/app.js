@@ -2199,7 +2199,7 @@ const makeLoginStatus = (className, postLoginSeq = postLoginSequence(), actorRec
     previousLastLogin: '',
     version: '20161102_160430',
     userIp: 2130706433,
-    ticket: 'local-admin-ticket',
+ticket: crypto.randomBytes(32).toString('hex'),
     piggyBank: null,
     purchaseTypeId: 0
 });
