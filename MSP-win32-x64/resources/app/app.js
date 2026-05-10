@@ -1023,6 +1023,32 @@ const warmRemoteGateway = () => new Promise((resolve) => {
     });
 });
 
+const registrationAssetAlias = (cleanPath) => {
+    const normalized = decodeURIComponent(String(cleanPath || '')).replace(/\\/g, '/').toLowerCase();
+    if (/^swf\/animations\/(?:girl|boy)\s+pose\.swf$/.test(normalized)) {
+        return 'swf/animationtest.swf';
+    }
+    if (normalized === 'swf/hair/hair.swf') {
+        return 'swf/world/shopicons/hair.swf';
+    }
+    if (normalized === 'swf/hair/hair_male.swf') {
+        return 'swf/world/shopicons/hair_male.swf';
+    }
+    if (normalized === 'swf/footwear/shoes.swf') {
+        return 'swf/world/shopicons/shoes.swf';
+    }
+    if (normalized === 'swf/footwear/shoes_male.swf') {
+        return 'swf/world/shopicons/shoes_male.swf';
+    }
+    if (/^swf\/tops\//.test(normalized)) {
+        return /(?:boy|male|_mf|maletop)/.test(normalized) ? 'swf/world/shopicons/tops_male.swf' : 'swf/world/shopicons/tops.swf';
+    }
+    if (/^swf\/bottoms\//.test(normalized)) {
+        return /(?:boy|male|_mf|maletop|bottoms_male)/.test(normalized) ? 'swf/world/shopicons/bottoms_male.swf' : 'swf/world/shopicons/bottoms.swf';
+    }
+    return null;
+};
+
 const serveRemoteAsset = async (req, res, cleanPath) => {
     if (!remoteAssetBaseUrl || !remoteAssetExtensions.has(path.extname(cleanPath).toLowerCase())) {
         return false;
@@ -1038,9 +1064,14 @@ const serveRemoteAsset = async (req, res, cleanPath) => {
     }
 
     const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+    const aliasPath = registrationAssetAlias(cleanPath);
     const candidates = [
         `${remoteAssetBaseUrl}/${cleanPath}${query}`,
-        `${remoteAssetBaseUrl}/${cleanPath.toLowerCase()}${query}`
+        `${remoteAssetBaseUrl}/${cleanPath.toLowerCase()}${query}`,
+        ...(aliasPath ? [
+            `${remoteAssetBaseUrl}/${aliasPath}${query}`,
+            `${remoteAssetBaseUrl}/${aliasPath.toLowerCase()}${query}`
+        ] : [])
     ];
 
     for (const remoteUrl of candidates) {
