@@ -1498,6 +1498,11 @@ const ACTOR_PERSONAL_INFO_ALIAS = 'MovieStarPlanet.DBML.ActorPersonalInfo';
 const ACTOR_STATUS_ALIAS = 'MovieStarPlanet.DBML.ActorStatus';
 const COMBAT_CATEGORISATION_ALIAS = 'MovieStarPlanet.Model.Combat.ValueObjects.CombatCategorisation';
 const CREATE_NEW_USER_STATUS_ALIAS = 'MovieStarPlanet.WebService.User.UserService+CreateNewUserStatus';
+const REGISTER_NEW_USER_DATA_ALIAS = 'RegisterNewUserData';
+const ACTOR_CLOTHES_REL_ALIAS = 'ActorClothesRel';
+const CLOTH_ALIAS = 'Cloth';
+const CLOTHES_CATEGORY_ALIAS = 'ClothesCategory';
+const SLOT_TYPE_ALIAS = 'SlotType';
 
 const amf0Amf3Value = (value) => Buffer.concat([Buffer.from([0x11]), amf3Value(value)]);
 
@@ -1630,11 +1635,11 @@ const facePart = (className, idField, id, swf, colors = '', regNewUser = REG_NEW
 const cloth = (id, swf, filename, clothesCategoryId, gender, colors = '') => {
     const isFemale = gender === 'Female';
     const regNewUser = registerFlagForGender(gender);
-    const slotType = typed('com.moviestarplanet.moviestar.valueObjects.SlotType', {
+    const slotType = typed(SLOT_TYPE_ALIAS, {
         SlotTypeId: clothesCategoryId,
         _SlotTypeId: clothesCategoryId
     });
-    const clothesCategory = typed('com.moviestarplanet.moviestar.valueObjects.ClothesCategory', {
+    const clothesCategory = typed(CLOTHES_CATEGORY_ALIAS, {
         ClothesCategoryId: clothesCategoryId,
         _ClothesCategoryId: clothesCategoryId,
         SlotTypeId: clothesCategoryId,
@@ -1642,10 +1647,12 @@ const cloth = (id, swf, filename, clothesCategoryId, gender, colors = '') => {
         SlotType: slotType,
         _SlotType: slotType
     });
-    const item = typed('com.moviestarplanet.moviestar.valueObjects.Cloth', {
+    const item = typed(CLOTH_ALIAS, {
         ClothId: id,
         ClothesId: id,
         Id: id,
+        ClothesCategoryId: clothesCategoryId,
+        _ClothesCategoryId: clothesCategoryId,
         SWF: swf,
         _SWF: swf,
         Filename: filename,
@@ -1687,7 +1694,7 @@ const cloth = (id, swf, filename, clothesCategoryId, gender, colors = '') => {
         _ThemeId: 0
     });
 
-    return typed('com.moviestarplanet.moviestar.valueObjects.ActorClothesRel', {
+    return typed(ACTOR_CLOTHES_REL_ALIAS, {
         ActorClothesRelId: id,
         _ActorClothesRelId: id,
         ClothesId: id,
@@ -1731,7 +1738,7 @@ const clothItem = (rel) => rel && (rel.Cloth || rel._Cloth || rel);
 
 const clothItems = (rels) => rels.map(clothItem).filter(Boolean);
 
-const loginActorClothesRels = () => starterClothes().slice(0, 6).map((rel) => typed('com.moviestarplanet.moviestar.valueObjects.ActorClothesRel', {
+const loginActorClothesRels = () => starterClothes().slice(0, 6).map((rel) => typed(ACTOR_CLOTHES_REL_ALIAS, {
     ActorClothesRelId: rel.ActorClothesRelId,
     _ActorClothesRelId: rel._ActorClothesRelId,
     ClothesId: rel.ClothesId,
@@ -1787,45 +1794,27 @@ const defaultRegisterActor = (gender, rels) => {
 
 const registerNewUserData = () => {
     const rels = starterClothes();
-    const hairRels = rels.filter((rel) => [1, 5].includes(relSlot(rel)));
-    const topRels = rels.filter((rel) => [2, 6, 7].includes(relSlot(rel)));
-    const bottomRels = rels.filter((rel) => [3, 8, 9, 60, 61].includes(relSlot(rel)));
-    const shoeRels = rels.filter((rel) => [10, 11, 12, 70, 71].includes(relSlot(rel)));
-    return withCollectionAliases(typed('com.moviestarplanet.moviestar.valueObjects.RegisterNewUserData', {
+    return typed(REGISTER_NEW_USER_DATA_ALIAS, {
     eyes: [
-        facePart('com.moviestarplanet.moviestar.valueObjects.Eye', 'EyeId', 1, 'swf/dragonbone_faceparts/eyes/eyes_girlnextdoor_2013/texture.swf', '0x5b351c'),
-        facePart('com.moviestarplanet.moviestar.valueObjects.Eye', 'EyeId', 2, 'swf/dragonbone_faceparts/eyes/eyes_boynextdoor_2013/texture.swf', '0x5b351c'),
-        facePart('com.moviestarplanet.moviestar.valueObjects.Eye', 'EyeId', 3, 'swf/dragonbone_faceparts/eyes/eyes_moviestar_2013/texture.swf', '0x3a6eb5'),
-        facePart('com.moviestarplanet.moviestar.valueObjects.Eye', 'EyeId', 4, 'swf/dragonbone_faceparts/eyes/eyes_theman_2013/texture.swf', '0x2d251c')
+        facePart('Eye', 'EyeId', 1, 'swf/dragonbone_faceparts/eyes/eyes_girlnextdoor_2013/texture.swf', '0x5b351c'),
+        facePart('Eye', 'EyeId', 2, 'swf/dragonbone_faceparts/eyes/eyes_boynextdoor_2013/texture.swf', '0x5b351c'),
+        facePart('Eye', 'EyeId', 3, 'swf/dragonbone_faceparts/eyes/eyes_moviestar_2013/texture.swf', '0x3a6eb5'),
+        facePart('Eye', 'EyeId', 4, 'swf/dragonbone_faceparts/eyes/eyes_theman_2013/texture.swf', '0x2d251c')
     ],
     noses: [
-        facePart('com.moviestarplanet.moviestar.valueObjects.Nose', 'NoseId', 1, 'swf/world/shopicons/nose.swf'),
-        facePart('com.moviestarplanet.moviestar.valueObjects.Nose', 'NoseId', 2, 'swf/world/shopicons/nose.swf')
+        facePart('Nose', 'NoseId', 1, 'swf/world/shopicons/nose.swf'),
+        facePart('Nose', 'NoseId', 2, 'swf/world/shopicons/nose.swf')
     ],
     mouths: [
-        facePart('com.moviestarplanet.moviestar.valueObjects.Mouth', 'MouthId', 1, 'swf/world/shopicons/mouth.swf', '0xd45a6a'),
-        facePart('com.moviestarplanet.moviestar.valueObjects.Mouth', 'MouthId', 2, 'swf/world/shopicons/mouth.swf', '0xb64254')
+        facePart('Mouth', 'MouthId', 1, 'swf/world/shopicons/mouth.swf', '0xd45a6a'),
+        facePart('Mouth', 'MouthId', 2, 'swf/world/shopicons/mouth.swf', '0xb64254')
     ],
     eyeShadows: [
-        facePart('com.moviestarplanet.moviestar.valueObjects.EyeShadow', 'EyeShadowId', 0, 'swf/dragonbone_faceparts/eyeshadow/eyeshadow_femalestar_2013/texture.swf', '0xffffff'),
-        facePart('com.moviestarplanet.moviestar.valueObjects.EyeShadow', 'EyeShadowId', 1, 'swf/dragonbone_faceparts/eyeshadow/eyeshadow_party_2013/texture.swf', '0x333333')
+        facePart('EyeShadow', 'EyeShadowId', 0, 'swf/dragonbone_faceparts/eyeshadow/eyeshadow_femalestar_2013/texture.swf', '0xffffff'),
+        facePart('EyeShadow', 'EyeShadowId', 1, 'swf/dragonbone_faceparts/eyeshadow/eyeshadow_party_2013/texture.swf', '0x333333')
     ],
-    skins: [
-        { SkinId: 1, _SkinId: 1, SWF: 'swf/skins/femaleskin.swf', _SWF: 'swf/skins/femaleskin.swf', SkinColor: '0xffd1b3', _SkinColor: '0xffd1b3', RegNewUser: REG_NEW_USER_FEMALE, _RegNewUser: REG_NEW_USER_FEMALE, IsFemale: true, _IsFemale: true, isFemale: true },
-        { SkinId: 2, _SkinId: 2, SWF: 'swf/skins/maleskin.swf', _SWF: 'swf/skins/maleskin.swf', SkinColor: '0xffd1b3', _SkinColor: '0xffd1b3', RegNewUser: REG_NEW_USER_MALE, _RegNewUser: REG_NEW_USER_MALE, IsFemale: false, _IsFemale: false, isFemale: false }
-    ],
-    skinColors: ['0xffd1b3', '0xe8b48f', '0xc58a65', '0x8a5a44'],
-    clothes: clothItems(rels),
-    hair: clothItems(hairRels),
-    hairs: clothItems(hairRels),
-    tops: clothItems(topRels),
-    bottoms: clothItems(bottomRels),
-    footwear: clothItems(shoeRels),
-    shoes: clothItems(shoeRels),
-    headwear: [],
-    defaultFemaleSkinSWF: 'swf/skins/femaleskin.swf',
-    defaultMaleSkinSWF: 'swf/skins/maleskin.swf'
-    }));
+    clothes: clothItems(rels)
+    });
 };
 
 const DEV_ACTOR_ID = 1;
