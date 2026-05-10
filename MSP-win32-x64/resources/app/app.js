@@ -2867,14 +2867,16 @@ const handleLocalGatewayRequest = async (req, res, fallbackReason = '') => {
     }
     try {
         const result = await getAmfResultForMethod(method, decodedArgs);
+        const useLegacyEncoder = method === 'MovieStarPlanet.WebService.User.AMFUserServiceWeb.Login';
         const responseBody = buildAmfResponse(envelope ? envelope.version : 0, responseUri, result, {
             amf3: shouldUseAmf3(method, result),
-            debugLabel: method
+            debugLabel: method,
+            legacy: useLegacyEncoder
         });
         dumpAmfExchange(method, req.body, responseBody, {
             responseUri,
             amf3: shouldUseAmf3(method, result),
-            legacy: false,
+            legacy: useLegacyEncoder,
             resultPreview: previewValue(result, 2000)
         });
         res.type('application/x-amf').send(responseBody);
