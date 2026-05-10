@@ -2093,7 +2093,7 @@ const makeLoginStatus = (className, postLoginSeq = postLoginSequence(), actorRec
 
 const loginStatus = (actorRecord = null) => makeLoginStatus('com.moviestarplanet.valueObjects.LoginStatus', postLoginSequence(), actorRecord);
 const serviceLoginStatus = (actorRecord = null) => {
-    const { __class, ...status } = makeLoginStatus('', servicePostLoginSequence(), actorRecord);
+    const { __class, ...status } = makeLoginStatus('', null, actorRecord);
     status.mutedUntil = null;
     status.helpMessage = '';
     status.amsHash = '';
