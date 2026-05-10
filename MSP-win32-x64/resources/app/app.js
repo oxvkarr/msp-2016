@@ -1046,11 +1046,19 @@ const registrationAssetAlias = (cleanPath) => {
     return null;
 };
 
+const isRegisterPoseAnimation = (cleanPath) => {
+    const normalized = decodeURIComponent(String(cleanPath || '')).replace(/\\/g, '/').toLowerCase();
+    return /^swf\/animations\/(?:girl|boy)\s+pose\.swf$/.test(normalized);
+};
+
 const serveRemoteAsset = async (req, res, cleanPath) => {
     if (!remoteAssetBaseUrl || !remoteAssetExtensions.has(path.extname(cleanPath).toLowerCase())) {
         return false;
     }
     if (!cleanPath || cleanPath.includes('..')) {
+        return false;
+    }
+    if (isRegisterPoseAnimation(cleanPath)) {
         return false;
     }
 
