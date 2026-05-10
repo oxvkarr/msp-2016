@@ -1980,7 +1980,7 @@ const devActorDetails = (actorRecord = null, includeClothDetails = true) => {
     Fame: actor.fame,
     Fortune: actor.fortune,
     FriendCount: 0,
-    ProfileText: 'Local admin/dev account',
+profileText: actor.profileText || actor.ProfileText || ''
     Moderator: 0,
     ProfileDisplays: 0,
     FavoriteMovie: '',
@@ -2102,7 +2102,7 @@ const loginActorDetails = (actorRecord = null) => {
     Fame: actor.fame,
     Fortune: actor.fortune,
     FriendCount: 0,
-    ProfileText: 'Local admin/dev account',
+profileText: actor.profileText || actor.ProfileText || ''
     Created: new Date(),
     LastLogin: new Date(),
     Moderator: 0,
@@ -2728,7 +2728,7 @@ const profileSummary = () => typed('com.moviestarplanet.profile.valueObjects.Pro
     Fortune: 999999999,
     Money: 999999999,
     Diamonds: 999999999,
-    ProfileText: 'Local admin/dev account',
+profileText: actor.profileText || actor.ProfileText || ''
     FriendCount: 0,
     Clothes: catalogClothes(12),
     Looks: [],
