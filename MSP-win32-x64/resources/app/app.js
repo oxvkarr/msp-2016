@@ -1492,6 +1492,11 @@ const amf3Value = (value) => {
 
 const typed = (__class, object) => Object.assign({ __class }, object);
 
+const ACTOR_DETAILS_ALIAS = 'MovieStarPlanet.DBML.ActorDetails';
+const ACTOR_PERSONAL_INFO_ALIAS = 'MovieStarPlanet.DBML.ActorPersonalInfo';
+const ACTOR_STATUS_ALIAS = 'MovieStarPlanet.DBML.ActorStatus';
+const COMBAT_CATEGORISATION_ALIAS = 'MovieStarPlanet.Model.Combat.ValueObjects.CombatCategorisation';
+
 const amf0Amf3Value = (value) => Buffer.concat([Buffer.from([0x11]), amf3Value(value)]);
 
 const toAmfSerializable = (value) => {
@@ -1755,7 +1760,7 @@ const defaultRegisterActor = (gender, rels) => {
     }).slice(0, 5);
     const skinSWF = isFemale ? 'swf/skins/femaleskin.swf' : 'swf/skins/maleskin.swf';
     const eyeId = isFemale ? 1 : 2;
-    return typed('com.moviestarplanet.usersession.valueobjects.ActorDetails', {
+    return typed(ACTOR_DETAILS_ALIAS, {
         ActorId: 0,
         Name: '',
         Gender: gender,
@@ -1846,7 +1851,7 @@ const actorDefaults = (actorRecord = {}) => {
 const devActorDetails = (actorRecord = null, includeClothDetails = true) => {
     const actor = actorDefaults(actorRecord);
     const actorClothesRels = includeClothDetails ? starterClothes().slice(0, 6) : loginActorClothesRels();
-    return typed('com.moviestarplanet.usersession.valueobjects.ActorDetails', {
+    return typed(ACTOR_DETAILS_ALIAS, {
     ActorId: actor.actorId,
     Name: actor.name,
     Level: actor.level,
@@ -1917,7 +1922,7 @@ const devActorDetails = (actorRecord = null, includeClothDetails = true) => {
         Name: 'stand',
         InitialAnimation: 'stand'
     }],
-    ActorPersonalInfo: typed('com.moviestarplanet.usersession.valueobjects.ActorPersonalInfo', {
+    ActorPersonalInfo: typed(ACTOR_PERSONAL_INFO_ALIAS, {
         ActorId: actor.actorId,
         ParentEmail: '',
         ChatAllowed: 1,
@@ -1951,7 +1956,7 @@ const servicePostLoginSequence = () => ({
     SpecialOffer: null
 });
 
-const loginActorPersonalInfo = () => typed('com.moviestarplanet.usersession.valueobjects.ActorPersonalInfo', {
+const loginActorPersonalInfo = () => typed(ACTOR_PERSONAL_INFO_ALIAS, {
     ActorId: DEV_ACTOR_ID,
     BirthDate: null,
     ParentEmail: '',
@@ -1968,7 +1973,7 @@ const loginActorPersonalInfo = () => typed('com.moviestarplanet.usersession.valu
 
 const loginActorDetails = (actorRecord = null) => {
     const actor = actorDefaults(actorRecord);
-    return typed('com.moviestarplanet.usersession.valueobjects.ActorDetails', {
+    return typed(ACTOR_DETAILS_ALIAS, {
     ActorId: actor.actorId,
     Name: actor.name,
     Level: actor.level,
@@ -2040,7 +2045,7 @@ const loginActorDetails = (actorRecord = null) => {
     BoyFriend: null,
     ActorPersonalInfo: loginActorPersonalInfo(),
     ActorRelationships: [],
-    ActorStatus: typed('com.moviestarplanet.usersession.valueobjects.ActorStatus', {
+    ActorStatus: typed(ACTOR_STATUS_ALIAS, {
         ActorId: actor.actorId,
         SoundMute: false,
         CampaignViewed: 0,
@@ -2055,7 +2060,7 @@ const loginActorDetails = (actorRecord = null) => {
         ThirdPartyCreation: false,
         PreviousLoginDate: new Date()
     }),
-    CombatCategorisation: typed('com.moviestarplanet.combat.valueobject.CombatCategorisation', {
+    CombatCategorisation: typed(COMBAT_CATEGORISATION_ALIAS, {
         ActorId: actor.actorId,
         Category: '',
         Level: 0,
