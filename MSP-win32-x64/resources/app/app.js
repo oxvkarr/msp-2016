@@ -20,10 +20,11 @@ const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || '';
 const mongoDbName = process.env.MONGODB_DB || 'msp_2016';
 const mongoStateCollection = process.env.MONGODB_STATE_COLLECTION || 'state';
 const defaultRemoteAssetBaseUrl = 'https://pub-2ec8e3c2f0a24e46ab1defac06482eb3.r2.dev';
+const officialMspAssetBaseUrl = (process.env.MSPCDN_ASSET_BASE_URL || 'https://assets.mspcdns.com/msp/103.1.40').replace(/\/+$/, '');
 const legacyMspAssetBaseUrl = 'http://cdn.moviestarplanet.com';
 const defaultRemoteGatewayUrl = 'https://msp-2016.onrender.com';
 const remoteAssetBaseUrl = (process.env.REMOTE_ASSET_BASE_URL || defaultRemoteAssetBaseUrl).replace(/\/+$/, '');
-const remoteAssetCacheEnabled = process.env.REMOTE_ASSET_CACHE !== '0';
+const remoteAssetCacheEnabled = process.env.REMOTE_ASSET_CACHE === '1';
 const remoteGatewayUrl = (process.env.REMOTE_GATEWAY_URL || defaultRemoteGatewayUrl).replace(/\/+$/, '');
 const remoteGatewayTimeoutMs = Number(process.env.REMOTE_GATEWAY_TIMEOUT_MS || 15000);
 const realMspProxyEnabled = process.env.REAL_MSP_PROXY === '1';
@@ -37,8 +38,9 @@ const isCreateNewUserMethod = (method) => /MovieStarPlanet\.WebService\.User\.(A
 const isLoginMethod = (method) => /MovieStarPlanet\.WebService\.User\.(AMFUserServiceWeb|AMFUserService)\.Login$/i.test(method || '');
 
 const shouldProxyRemoteGateway = (method) => {
-    if (!useRemoteGateway) return false;
-    return isCreateNewUserMethod(method) || isLoginMethod(method);
+    // Pelny lokalny flow konta: kreator, CreateNewUser, runway i Login zostaja w tym app.js.
+    // Assety nadal moga byc pobierane z R2 przez remoteAssetBaseUrl.
+    return false;
 };
 const configuredPort = process.env.PORT || process.env.MSP_PORT || '';
 const normalizeLocaleCode = (value) => {
@@ -50,9 +52,27 @@ const normalizeLocaleCode = (value) => {
 const forcedLocale = normalizeLocaleCode(process.env.MSP_LOCALE || 'pl_PL');
 const forcedLocalePath = forcedLocale.toLowerCase();
 const startupParams = 'country=pl&locale=pl_PL&language=pl&selectedLocale=pl_PL&server=pl&domain=pl';
-const buildFlashVars = (baseUrl = 'http://127.0.0.1/', wsUrl = 'http://localhost:1600/') => {
-    const cleanBase = String(baseUrl || 'http://127.0.0.1/').replace(/\/?$/, '/');
-    const cleanWs = String(wsUrl || 'http://localhost:1600/').replace(/\/?$/, '/');
+
+// Render/GitHub deployment helpers. Set PUBLIC_BASE_URL on Render if you want to force
+// a specific domain, for example: https://twoja-apka.onrender.com
+const normalizeBaseUrl = (value) => String(value || '').trim().replace(/\/+$/, '') + '/';
+const configuredPublicBaseUrl = normalizeBaseUrl(
+    process.env.PUBLIC_BASE_URL ||
+    process.env.RENDER_EXTERNAL_URL ||
+    process.env.APP_URL ||
+    ''
+);
+const requestPublicBaseUrl = (req) => {
+    if (configuredPublicBaseUrl !== '/') return configuredPublicBaseUrl;
+    const forwardedProto = String((req && req.headers && req.headers['x-forwarded-proto']) || '').split(',')[0].trim();
+    const proto = forwardedProto || (req && req.protocol) || 'http';
+    const host = req && req.headers && req.headers.host ? req.headers.host : '127.0.0.1';
+    return `${proto}://${host}/`;
+};
+const requestPublicWsUrl = (req) => normalizeBaseUrl(process.env.PUBLIC_WS_URL || requestPublicBaseUrl(req));
+const buildFlashVars = (baseUrl = '/', wsUrl = '/') => {
+    const cleanBase = normalizeBaseUrl(baseUrl || '/');
+    const cleanWs = normalizeBaseUrl(wsUrl || cleanBase);
     return [
         startupParams,
         `resourceModuleUrl=${encodeURIComponent(`swf/locales/${forcedLocalePath}_resourcemodule.swf?v=Main_20161102_160430`)}`,
@@ -145,17 +165,9 @@ app.all('/crossdomain.xml', (req, res) => {
     res.send(FLASH_POLICY_XML);
 });
 
-const requestBaseUrl = (req) => {
-    const host = req && req.headers && req.headers.host ? req.headers.host : '127.0.0.1';
-    return `http://${host}/`;
-};
+const requestBaseUrl = (req) => requestPublicBaseUrl(req);
 
-const requestWsUrl = (req) => {
-    const host = req && req.headers && req.headers.host ? req.headers.host.split(':')[0] : 'localhost';
-    return host.toLowerCase() === 'ipv4.fiddler'
-        ? 'http://ipv4.fiddler:1600/'
-        : 'http://localhost:1600/';
-};
+const requestWsUrl = (req) => requestPublicWsUrl(req);
 
 const fallbackPlayHtml = (req) => {
     const flashVars = buildFlashVars(requestBaseUrl(req), requestWsUrl(req));
@@ -441,15 +453,15 @@ const fallbackPlayHtml = (req) => {
     <script>
         (function () {
             var flashStub = function (name) {
-    return function () {
-        try {
-            console.log('[FLASH CALL] ' + name, Array.prototype.slice.call(arguments).join(' '));
-        } catch (error) {
-            console.log('[FLASH CALL] ' + name);
-        }
-        return true;
-    };
-};
+                return function () {
+                    try {
+                        console.log('[FLASH CALL] ' + name, Array.prototype.slice.call(arguments).join(' '));
+                    } catch (error) {
+                        console.log('[FLASH CALL] ' + name);
+                    }
+                    return null;
+                };
+            };
             [
                 'trackLogin',
                 'trackCreateNewUser',
@@ -468,7 +480,6 @@ const fallbackPlayHtml = (req) => {
                 'cleanUpOverlay',
                 'moveOverlay',
                 'loadOverlay'
-                
             ].forEach(function (name) {
                 if (typeof window[name] !== 'function') {
                     window[name] = flashStub(name);
@@ -645,22 +656,9 @@ const fallbackPlayHtml = (req) => {
                     return original.apply(console, arguments);
                 };
             });
-window.onerror = function (message, source, line, column, error) {
-    write('ERROR', [
-        message + ' @ ' + source + ':' + line + ':' + column,
-        error && error.stack ? error.stack : ''
-    ]);
-};
-
-window.addEventListener('unhandledrejection', function (event) {
-    write('ERROR', ['Unhandled promise rejection', event.reason]);
-});
-setInterval(function () {
-    var movie = document.getElementById('msp');
-    if (movie) {
-        console.log('[MSP STATE] object exists');
-    }
-}, 5000);
+            window.onerror = function (message, source, line) {
+                write('ERROR', [message + ' @ ' + source + ':' + line]);
+            };
             if (clear) clear.onclick = function () {
                 allLines = [];
                 counters = { req: 0, amf: 0, assets: 0 };
@@ -756,7 +754,43 @@ const sendPlayHtml = (req, res) => {
 
 app.get(['/', '/play.html'], sendPlayHtml);
 app.get('/cdnpath.txt', (req, res) => {
-    res.type('text/plain').send('http://127.0.0.1/');
+    res.type('text/plain').send(requestBaseUrl(req));
+});
+
+app.get(/^\/+assetconfig\.json$/i, async (req, res) => {
+    const targets = [
+        `${remoteAssetBaseUrl}/assetconfig.json`,
+        `${remoteAssetBaseUrl}/msp/103.1.40/assetconfig.json`,
+        `${officialMspAssetBaseUrl}/assetconfig.json`
+    ];
+    for (const targetUrl of targets) {
+        try {
+            await pipeRemoteAsset(targetUrl, res, 'assetconfig.json');
+            log(`[ASSETCONFIG] ${req.url} -> ${targetUrl}`);
+            return;
+        } catch (err) {
+            log(`[ASSETCONFIG MISS] ${targetUrl} ${err.message}`);
+        }
+    }
+    res.status(502).type('text/plain').send('assetconfig unavailable');
+});
+
+app.get(/^\/+msp\/+103\.1\.40\/+(?:assetconfig\.json)$/i, async (req, res) => {
+    const targets = [
+        `${remoteAssetBaseUrl}/msp/103.1.40/assetconfig.json`,
+        `${remoteAssetBaseUrl}/assetconfig.json`,
+        `${officialMspAssetBaseUrl}/assetconfig.json`
+    ];
+    for (const targetUrl of targets) {
+        try {
+            await pipeRemoteAsset(targetUrl, res, 'assetconfig.json');
+            log(`[ASSETCONFIG] ${req.url} -> ${targetUrl}`);
+            return;
+        } catch (err) {
+            log(`[ASSETCONFIG MISS] ${targetUrl} ${err.message}`);
+        }
+    }
+    res.status(502).type('text/plain').send('assetconfig unavailable');
 });
 
 const sanitizeLocalMap = (text) => text
@@ -823,6 +857,13 @@ const contentTypeFor = (filePath) => {
         '.html': 'text/html',
         '.js': 'application/javascript'
     }[ext] || 'application/octet-stream';
+};
+
+
+const emptySwfPayload = Buffer.from('RldTBhIAAAAwCgCgAAwBAAAA', 'base64');
+const sendEmptySwfAsset = (req, res) => {
+    log(`[EMPTY SWF ASSET] ${req.url}`);
+    res.type('application/x-shockwave-flash').send(emptySwfPayload);
 };
 
 const downloadRemoteAsset = (url, destination) => new Promise((resolve, reject) => {
@@ -925,14 +966,8 @@ const proxyGatewayRequest = (req, res, method, fallbackHandler) => {
                 fallback(`remote status ${statusCode}`);
                 return;
             }
-                        settled = true;
+            settled = true;
             log(`[REMOTE GATEWAY OK] ${method || ''} status=${statusCode} bytes=${responseBody.length}`);
-
-            dumpAmfExchange(method, body, responseBody, {
-                responseUri: '/1',
-                remote: true
-            });
-
             res.status(statusCode);
             res.set('Content-Type', proxyRes.headers['content-type'] || 'application/x-amf');
             res.send(responseBody);
@@ -943,11 +978,9 @@ const proxyGatewayRequest = (req, res, method, fallbackHandler) => {
         log(`[REMOTE GATEWAY FAIL] ${targetUrl.toString()} ${err.message}`);
         fallback(err.message);
     });
-
     proxyReq.on('timeout', () => {
         proxyReq.destroy(new Error('Remote gateway timeout'));
     });
-
     proxyReq.end(body);
     log(`[REMOTE GATEWAY] ${method || ''} -> ${targetUrl.toString()}`);
     return true;
@@ -1155,6 +1188,15 @@ const serveRemoteAsset = async (req, res, cleanPath) => {
         }
     }
 
+    const officialAssetCandidates = officialMspAssetBaseUrl ? [
+        ...(aliasPath ? [
+            `${officialMspAssetBaseUrl}/${aliasPath}${query}`,
+            `${officialMspAssetBaseUrl}/${aliasPath.toLowerCase()}${query}`
+        ] : []),
+        `${officialMspAssetBaseUrl}/${cleanPath}${query}`,
+        `${officialMspAssetBaseUrl}/${cleanPath.toLowerCase()}${query}`
+    ] : [];
+
     const candidates = [
         ...legacyMspAssetCandidates(cleanPath, query),
         ...(aliasPath ? [
@@ -1162,7 +1204,8 @@ const serveRemoteAsset = async (req, res, cleanPath) => {
             `${remoteAssetBaseUrl}/${aliasPath.toLowerCase()}${query}`
         ] : []),
         `${remoteAssetBaseUrl}/${cleanPath}${query}`,
-        `${remoteAssetBaseUrl}/${cleanPath.toLowerCase()}${query}`
+        `${remoteAssetBaseUrl}/${cleanPath.toLowerCase()}${query}`,
+        ...officialAssetCandidates
     ];
 
     for (const remoteUrl of candidates) {
@@ -1265,15 +1308,90 @@ app.get(/^\/(?:MSP_alpha_blob_)?lookdata_[0-9_]+$/i, (req, res) => {
 });
 
 app.get(/^\/Main_20161102_160430\.swf$/i, async (req, res, next) => {
-    const filePath = path.join(publicPath, 'main_20161102_160430.swf');
-    if (fs.existsSync(filePath)) {
+    // Main tez bierzemy najpierw z publicznego R2, dopiero potem z lokalnego public/.
+    if (await serveRemoteAsset(req, res, 'Main_20161102_160430.swf')) {
+        return;
+    }
+    if (await serveRemoteAsset(req, res, 'main_20161102_160430.swf')) {
+        return;
+    }
+    const fileCandidates = [
+        path.join(publicPath, 'Main_20161102_160430.swf'),
+        path.join(publicPath, 'main_20161102_160430.swf')
+    ];
+    const filePath = fileCandidates.find((candidate) => fs.existsSync(candidate));
+    if (filePath) {
         res.type('application/x-shockwave-flash').sendFile(filePath);
+        return;
+    }
+    next();
+});
+
+app.get(/^\/+main_20161102_160430\.swf$/i, async (req, res, next) => {
+    if (await serveRemoteAsset(req, res, 'Main_20161102_160430.swf')) {
         return;
     }
     if (await serveRemoteAsset(req, res, 'main_20161102_160430.swf')) {
         return;
     }
     next();
+});
+
+app.get(/^\/+graphics\/FrontpageDesign_film\.swf$/i, async (req, res) => {
+    if (await serveRemoteAsset(req, res, 'graphics/FrontpageDesign_film.swf')) {
+        return;
+    }
+    if (await serveRemoteAsset(req, res, 'graphics/frontpagedesign_film.swf')) {
+        return;
+    }
+    sendEmptySwfAsset(req, res);
+});
+app.get(/^\/+graphics\/moviestar\.swf$/i, async (req, res) => {
+    if (await serveRemoteAsset(req, res, 'graphics/moviestar.swf')) {
+        return;
+    }
+    if (await serveRemoteAsset(req, res, 'graphics/FrontpageDesign_film.swf')) {
+        return;
+    }
+    if (await serveRemoteAsset(req, res, 'graphics/frontpagedesign_film.swf')) {
+        return;
+    }
+    sendEmptySwfAsset(req, res);
+});
+
+app.get(/^\/+swf\/skins\/swf\/skins\/([^/]+?)\.swf\.swf$/i, async (req, res) => {
+    const skinName = String(req.params[0] || 'maleskin').replace(/[^a-z0-9_-]/gi, '') || 'maleskin';
+    const skinPath = `swf/skins/${skinName}.swf`;
+    log(`[SKIN PATH FIX] ${req.url} -> ${skinPath}`);
+    if (await serveRemoteAsset(req, res, skinPath)) {
+        return;
+    }
+    if (skinName.toLowerCase() !== 'maleskin' && await serveRemoteAsset(req, res, 'swf/skins/maleskin.swf')) {
+        return;
+    }
+    sendEmptySwfAsset(req, res);
+});
+
+app.get(/^\/+swf\/skins\/([^/]+?)\.swf\.swf$/i, async (req, res) => {
+    const skinName = String(req.params[0] || 'maleskin').replace(/[^a-z0-9_-]/gi, '') || 'maleskin';
+    const skinPath = `swf/skins/${skinName}.swf`;
+    log(`[SKIN DOUBLE EXT FIX] ${req.url} -> ${skinPath}`);
+    if (await serveRemoteAsset(req, res, skinPath)) {
+        return;
+    }
+    sendEmptySwfAsset(req, res);
+});
+
+app.get(/^\/+swf\/skins\/null\.swf$/i, async (req, res) => {
+    log(`[SKIN ALIAS] ${req.url} -> swf/skins/maleskin.swf`);
+    if (await serveRemoteAsset(req, res, 'swf/skins/maleskin.swf')) {
+        return;
+    }
+    log(`[SKIN ALIAS MISS] ${req.url} -> swf/skins/maleskin.swf`);
+    if (await serveRemoteAsset(req, res, 'swf/skins/femaleskin.swf')) {
+        return;
+    }
+    sendEmptySwfAsset(req, res);
 });
 
 app.get('/dictionaries/Global/instantBlocking.txt', (req, res) => {
@@ -1390,6 +1508,221 @@ const userServiceWsdl = `<?xml version="1.0" encoding="utf-8"?>
     <documentation>Local MSP compatibility endpoint</documentation>
   </service>
 </definitions>`;
+
+
+const serviceWsdl = `<?xml version="1.0" encoding="utf-8"?>
+<definitions xmlns="http://schemas.xmlsoap.org/wsdl/" xmlns:tns="http://moviestarplanet.com/" targetNamespace="http://moviestarplanet.com/">
+  <service name="Service">
+    <documentation>Local MSP 2016 compatibility endpoint</documentation>
+  </service>
+</definitions>`;
+
+
+const cleanSoapName = (name, fallback = 'item') => {
+    const raw = String(name || fallback).replace(/^.*[.+]/, '');
+    const safe = raw.replace(/[^A-Za-z0-9_:-]/g, '') || fallback;
+    return /^[A-Za-z_]/.test(safe) ? safe : fallback;
+};
+
+const soapXmlNode = (name, value, depth = 0) => {
+    const tag = cleanSoapName(name);
+    if (value === undefined || value === null) {
+        return `<${tag} xsi:nil="true" />`;
+    }
+    if (value instanceof Date) {
+        return `<${tag}>${xmlEscape(value.toISOString())}</${tag}>`;
+    }
+    if (typeof value !== 'object') {
+        return `<${tag}>${xmlEscape(value)}</${tag}>`;
+    }
+    if (Array.isArray(value)) {
+        const itemTag = cleanSoapName(value[0] && value[0].__class ? value[0].__class : 'item');
+        return `<${tag}>${value.map((item) => soapXmlNode(itemTag, item, depth + 1)).join('')}</${tag}>`;
+    }
+    if (depth > 8) {
+        return `<${tag} />`;
+    }
+    const body = Object.keys(value)
+        .filter((key) => key !== '__class')
+        .map((key) => soapXmlNode(key, value[key], depth + 1))
+        .join('');
+    return `<${tag}>${body}</${tag}>`;
+};
+
+const soapRegisterNewUserDataXml = () => {
+    const node = (name, value) => `<${name}>${xmlEscape(value)}</${name}>`;
+    const face = (tag, idName, id, swf, colors = '', reg = 3) => `<${tag}>`
+        + node(idName, id)
+        + node('Id', id)
+        + node('SWF', swf)
+        + node('_SWF', swf)
+        + node('DefaultColors', colors)
+        + node('_DefaultColors', colors)
+        + node('RegNewUser', reg)
+        + node('_RegNewUser', reg)
+        + node('Price', 0)
+        + node('Vip', false)
+        + node('SkinId', 0)
+        + node('sortorder', id)
+        + `</${tag}>`;
+    const cloth = (id, cat, swf, filename, colors = '', reg = 3) => `<Cloth>`
+        + node('ClothId', id)
+        + node('_ClothId', id)
+        + node('ClothesId', id)
+        + node('_ClothesId', id)
+        + node('Id', id)
+        + node('ClothesCategoryId', cat)
+        + node('_ClothesCategoryId', cat)
+        + node('SWF', swf)
+        + node('_SWF', swf)
+        + node('Filename', filename)
+        + node('_Filename', filename)
+        + node('ColorScheme', colors)
+        + node('_ColorScheme', colors)
+        + node('RegNewUser', reg)
+        + node('_RegNewUser', reg)
+        + node('Gender', reg)
+        + node('_Gender', reg)
+        + node('Price', 0)
+        + node('DiamondsPrice', 0)
+        + node('Vip', false)
+        + node('Scale', 1)
+        + node('ShopId', 0)
+        + node('SkinId', 0)
+        + node('sortorder', id)
+        + `<ClothesCategory>`
+        + node('ClothesCategoryId', cat)
+        + node('SlotTypeId', cat)
+        + `<SlotType>${node('SlotTypeId', cat)}</SlotType>`
+        + `</ClothesCategory>`
+        + `</Cloth>`;
+    const rel = (id, colors = '') => `<ActorClothesRel>`
+        + node('ActorClothesRelId', id)
+        + node('_ActorClothesRelId', id)
+        + node('ClothesId', id)
+        + node('_ClothesId', id)
+        + node('Color', colors)
+        + node('_Color', colors)
+        + node('IsWearing', true)
+        + node('_IsWearing', true)
+        + node('x', 0)
+        + node('y', 0)
+        + `</ActorClothesRel>`;
+
+    const eye = face('Eye', 'EyeId', 2, 'eyes_boynextdoor_2013/texture', '0x3a6eb5', 2);
+    const nose = face('Nose', 'NoseId', 4, 'nose_3', '', 2);
+    const mouth = face('Mouth', 'MouthId', 4, 'male_mouth_1', 'skincolor,0xb64254', 2);
+    const eyeShadow = face('EyeShadow', 'EyeShadowId', 0, 'eyeshadow_femalestar_2013/texture', '0xffffff', 3);
+    const hair = cloth(1005, 1, 'swf/hair', 'hair_3.swf', '0xcc0000,0xff6600,0xffff00', 2);
+    const top = cloth(1057, 2, 'swf/tops', 'body armor top.swf', '0x666666', 2);
+    const bottom = cloth(1002, 3, 'swf/bottoms', 'long trousers_1.swf', '', 2);
+    const shoes = cloth(1128, 10, 'swf/footwear', 'shoes_1.swf', '0x6699cc,0x990000', 2);
+    const rels = [
+        rel(1005, '0xcc0000,0xff6600,0xffff00'),
+        rel(1057, '0x666666'),
+        rel(1002, ''),
+        rel(1128, '0x6699cc,0x990000')
+    ].join('');
+    const actor = `<ActorDetails>`
+        + node('ActorId', 0)
+        + node('_ActorId', 0)
+        + node('Name', '')
+        + node('_Name', '')
+        + node('Gender', 'Male')
+        + node('_Gender', 'Male')
+        + node('SkinSWF', 'maleskin')
+        + node('_SkinSWF', 'maleskin')
+        + node('SkinColor', '0xffd1b3')
+        + node('_SkinColor', '0xffd1b3')
+        + node('EyeId', 2)
+        + node('NoseId', 4)
+        + node('MouthId', 4)
+        + node('EyeColors', '0x3a6eb5')
+        + node('MouthColors', 'skincolor,0xb64254')
+        + `<ActorClothesRels>${rels}</ActorClothesRels>`
+        + `<_ActorClothesRels>${rels}</_ActorClothesRels>`
+        + `</ActorDetails>`;
+
+    // Ten main 2016 bywa wybredny: jedne buildy szukaja pol z duzej litery,
+    // inne z malej albo z podkreslnikiem. Dlatego odpowiedz daje wszystkie aliasy.
+    const core = [
+        `<Eyes>${eye}</Eyes>`, `<eyes>${eye}</eyes>`, `<_eyes>${eye}</_eyes>`,
+        `<Noses>${nose}</Noses>`, `<noses>${nose}</noses>`, `<_noses>${nose}</_noses>`,
+        `<Mouths>${mouth}</Mouths>`, `<mouths>${mouth}</mouths>`, `<_mouths>${mouth}</_mouths>`,
+        `<EyeShadows>${eyeShadow}</EyeShadows>`, `<eyeShadows>${eyeShadow}</eyeShadows>`, `<_eyeShadows>${eyeShadow}</_eyeShadows>`,
+        `<Clothes>${hair}${top}${bottom}${shoes}</Clothes>`, `<clothes>${hair}${top}${bottom}${shoes}</clothes>`, `<_clothes>${hair}${top}${bottom}${shoes}</_clothes>`,
+        `<ActorClothesRels>${rels}</ActorClothesRels>`, `<actorClothesRels>${rels}</actorClothesRels>`, `<_actorClothesRels>${rels}</_actorClothesRels>`,
+        `<MaleActor>${actor}</MaleActor>`, `<maleActor>${actor}</maleActor>`, `<_maleActor>${actor}</_maleActor>`,
+        `<FemaleActor>${actor}</FemaleActor>`, `<femaleActor>${actor}</femaleActor>`, `<_femaleActor>${actor}</_femaleActor>`,
+        `<DefaultMaleActor>${actor}</DefaultMaleActor>`, `<defaultMaleActor>${actor}</defaultMaleActor>`, `<_defaultMaleActor>${actor}</_defaultMaleActor>`,
+        `<DefaultFemaleActor>${actor}</DefaultFemaleActor>`, `<defaultFemaleActor>${actor}</defaultFemaleActor>`, `<_defaultFemaleActor>${actor}</_defaultFemaleActor>`
+    ].join('');
+    const xml = `<LoadDataForRegisterNewUserResult>${core}<RegisterNewUserData>${core}</RegisterNewUserData></LoadDataForRegisterNewUserResult>`;
+    log(`[SOAP REGISTER ALIAS] responseBytes=${Buffer.byteLength(xml, 'utf8')}`);
+    return xml;
+};
+const handleSoapCompatibilityRequest = (req, res, serviceLabel = 'SOAP') => {
+    const action = soapActionFrom(req);
+    const body = Buffer.isBuffer(req.body) ? req.body.toString('utf8').replace(/\s+/g, ' ').slice(0, 260) : '';
+    log(`[${serviceLabel}] ${req.method} ${req.url} action=${action} body=${body}`);
+
+    if (/GetAppSettings/i.test(action)) {
+        sendSoapResult(res, 'GetAppSettings', soapAppSettingsXml(soapStringValues(req)));
+        return;
+    }
+    if (/GetIPLoginType/i.test(action)) {
+        sendSoapResult(res, 'GetIPLoginType', '<GetIPLoginTypeResult>0</GetIPLoginTypeResult>');
+        return;
+    }
+    if (/getLoginHistory/i.test(action)) {
+        sendSoapResult(res, 'getLoginHistory', '<getLoginHistoryResult />');
+        return;
+    }
+
+    if (/LoadDataForRegisterNewUser/i.test(action)) {
+        const registerXml = soapRegisterNewUserDataXml();
+        log(`[SOAP REGISTER] responseBytes=${Buffer.byteLength(registerXml, 'utf8')}`);
+        sendSoapResult(res, 'LoadDataForRegisterNewUser', registerXml);
+        return;
+    }
+    if (/GetActorCount/i.test(action)) {
+        sendSoapResult(res, 'GetActorCount', '<GetActorCountResult>0</GetActorCountResult>');
+        return;
+    }
+    if (/GetMovieCount/i.test(action)) {
+        sendSoapResult(res, 'GetMovieCount', '<GetMovieCountResult>0</GetMovieCountResult>');
+        return;
+    }
+    if (/LoadActorWithCurrentClothesBasicDataOnly/i.test(action)) {
+        sendSoapResult(res, 'LoadActorWithCurrentClothesBasicDataOnly', soapXmlNode('LoadActorWithCurrentClothesBasicDataOnlyResult', devActorDetails(null, true)));
+        return;
+    }
+
+    if (/GetServerTime|GetTime|ServerTime/i.test(action)) {
+        const safeTimeAction = /^[A-Za-z_][A-Za-z0-9_]*$/.test(action) && action !== 'Unknown' ? action : 'GetServerTime';
+        sendSoapResult(res, safeTimeAction, `<${safeTimeAction}Result>${xmlEscape(new Date().toISOString())}</${safeTimeAction}Result>`);
+        return;
+    }
+    if (/Login2/i.test(action)) {
+        sendSoapResult(res, 'Login2', '<Login2Result><loginStatus><status>Success</status></loginStatus></Login2Result>');
+        return;
+    }
+    if (/Login/i.test(action)) {
+        sendSoapResult(res, 'Login', '<LoginResult><status>Success</status></LoginResult>');
+        return;
+    }
+
+    const safeAction = /^[A-Za-z_][A-Za-z0-9_]*$/.test(action) && action !== 'Unknown' ? action : 'GetIPLoginType';
+    sendSoapResult(res, safeAction, `<${safeAction}Result>false</${safeAction}Result>`);
+};
+
+app.all(/^\/+WebService\/+Service\.asmx\/?$/i, (req, res) => {
+    if (req.method === 'GET' || /wsdl/i.test(req.url)) {
+        res.type('text/xml').send(serviceWsdl);
+        return;
+    }
+    handleSoapCompatibilityRequest(req, res, 'SOAP SERVICE');
+});
 
 app.all(/^\/+WebService\/User\/UserService\.asmx$/i, (req, res) => {
     const action = soapActionFrom(req);
@@ -1885,28 +2218,35 @@ const relsBySlot = (rels, slot) => rels.filter((rel) => relSlot(rel) === slot);
 
 const defaultRegisterActor = (gender, rels) => {
     const isFemale = gender === 'Female';
+    const wantedFlag = isFemale ? REG_NEW_USER_FEMALE : REG_NEW_USER_MALE;
     const actorRels = rels.filter((rel) => {
         const item = clothItem(rel);
-        return !item || !item.Gender || item.Gender === gender;
+        const flag = item && Number(item.RegNewUser || item._RegNewUser || item.Gender || item._Gender || REG_NEW_USER_UNISEX);
+        return !item || flag === wantedFlag || flag === REG_NEW_USER_UNISEX;
     }).slice(0, 5);
-    const skinSWF = isFemale ? 'swf/skins/femaleskin.swf' : 'swf/skins/maleskin.swf';
+    const skinSWF = isFemale ? 'femaleskin' : 'maleskin';
     const eyeId = isFemale ? 1 : 2;
     return typed(ACTOR_DETAILS_ALIAS, {
         ActorId: 0,
+        _ActorId: 0,
         Name: '',
+        _Name: '',
         Gender: gender,
+        _Gender: gender,
         SkinSWF: skinSWF,
         _SkinSWF: skinSWF,
         SkinColor: '0xffd1b3',
         _SkinColor: '0xffd1b3',
         EyeId: eyeId,
         _EyeId: eyeId,
-        NoseId: 1,
-        _NoseId: 1,
-        MouthId: 1,
-        _MouthId: 1,
+        NoseId: isFemale ? 1 : 4,
+        _NoseId: isFemale ? 1 : 4,
+        MouthId: isFemale ? 1 : 4,
+        _MouthId: isFemale ? 1 : 4,
         EyeColors: isFemale ? '0x5b351c' : '0x3a6eb5',
-        MouthColors: '0xd45a6a',
+        _EyeColors: isFemale ? '0x5b351c' : '0x3a6eb5',
+        MouthColors: isFemale ? 'skincolor,0xd45a6a' : 'skincolor,0xb64254',
+        _MouthColors: isFemale ? 'skincolor,0xd45a6a' : 'skincolor,0xb64254',
         ActorClothesRels: actorRels,
         _ActorClothesRels: actorRels,
         Clothes: clothItems(actorRels),
@@ -1916,27 +2256,33 @@ const defaultRegisterActor = (gender, rels) => {
 
 const registerNewUserData = () => {
     const rels = starterClothes();
-    return typed(REGISTER_NEW_USER_DATA_ALIAS, {
-    eyes: [
-        facePart('Eye', 'EyeId', 1, 'eyes_1', REG_NEW_USER_FEMALE),
-        facePart('Eye', 'EyeId', 2, 'male_eye1', REG_NEW_USER_MALE),
-        facePart('Eye', 'EyeId', 3, 'female_eyes_2011_2', REG_NEW_USER_FEMALE),
-        facePart('Eye', 'EyeId', 4, 'MaleEyes1', REG_NEW_USER_MALE)
-    ],
-    noses: [
-        facePart('Nose', 'NoseId', 1, 'nose_6',  REG_NEW_USER_FEMALE),
-        facePart('Nose', 'NoseId', 4, 'nose_4',  REG_NEW_USER_MALE)
-    ],
-    mouths: [
-        facePart('Mouth', 'MouthId', 1, 'female_mouth_1', 'skincolor,0xd45a6a', REG_NEW_USER_FEMALE),
-        facePart('Mouth', 'MouthId', 4, 'male_mouth_1', 'skincolor,0xb64254', REG_NEW_USER_MALE)
-    ],
-    eyeShadows: [
-        facePart('EyeShadow', 'EyeShadowId', 0, 'eyeshadow_femalestar_2013/texture', '0xffffff'),
-        facePart('EyeShadow', 'EyeShadowId', 1, 'eyeshadow_party_2013/texture', '0x333333')
-    ],
-    clothes: clothItems(rels)
+    const data = typed(REGISTER_NEW_USER_DATA_ALIAS, {
+        eyes: [
+            facePart('Eye', 'EyeId', 1, 'eyes_girlnextdoor_2013/texture', '0x5b351c'),
+            facePart('Eye', 'EyeId', 2, 'eyes_boynextdoor_2013/texture', '0x5b351c'),
+            facePart('Eye', 'EyeId', 3, 'eyes_moviestar_2013/texture', '0x3a6eb5'),
+            facePart('Eye', 'EyeId', 4, 'eyes_theman_2013/texture', '0x2d251c')
+        ],
+        noses: [
+            facePart('Nose', 'NoseId', 1, 'nose_1', '', REG_NEW_USER_FEMALE),
+            facePart('Nose', 'NoseId', 4, 'nose_3', '', REG_NEW_USER_MALE)
+        ],
+        mouths: [
+            facePart('Mouth', 'MouthId', 1, 'female_mouth_1', 'skincolor,0xd45a6a', REG_NEW_USER_FEMALE),
+            facePart('Mouth', 'MouthId', 4, 'male_mouth_1', 'skincolor,0xb64254', REG_NEW_USER_MALE)
+        ],
+        eyeShadows: [
+            facePart('EyeShadow', 'EyeShadowId', 0, 'eyeshadow_femalestar_2013/texture', '0xffffff'),
+            facePart('EyeShadow', 'EyeShadowId', 1, 'eyeshadow_party_2013/texture', '0x333333')
+        ],
+        clothes: clothItems(rels),
+        actorClothesRels: rels,
+        maleActor: defaultRegisterActor('Male', rels),
+        femaleActor: defaultRegisterActor('Female', rels),
+        defaultMaleActor: defaultRegisterActor('Male', rels),
+        defaultFemaleActor: defaultRegisterActor('Female', rels)
     });
+    return withCollectionAliases(data);
 };
 
 const DEV_ACTOR_ID = 1;
@@ -1953,7 +2299,7 @@ const actorDefaults = (actorRecord = {}) => {
     diamonds: actor.diamonds || actor.Diamonds || 0,
     fame: actor.fame || actor.Fame || 0,
     fortune: actor.fortune || actor.Fortune || 0,
-    skinSWF: actor.skinSWF || actor.SkinSWF || 'swf/skins/maleskin.swf',
+    skinSWF: actor.skinSWF || actor.SkinSWF || 'maleskin',
     skinColor: actor.skinColor || actor.SkinColor || '0xffd1b3',
     eyeId: actor.eyeId || actor.EyeId || 2,
     noseId: actor.noseId || actor.NoseId || 1,
@@ -1980,7 +2326,7 @@ const devActorDetails = (actorRecord = null, includeClothDetails = true) => {
     Fame: actor.fame,
     Fortune: actor.fortune,
     FriendCount: 0,
-ProfileText: actor.profileText || actor.ProfileText || '',
+    ProfileText: 'Local admin/dev account',
     Moderator: 0,
     ProfileDisplays: 0,
     FavoriteMovie: '',
@@ -2102,7 +2448,7 @@ const loginActorDetails = (actorRecord = null) => {
     Fame: actor.fame,
     Fortune: actor.fortune,
     FriendCount: 0,
-ProfileText: actor.profileText || actor.ProfileText || '',
+    ProfileText: 'Local admin/dev account',
     Created: new Date(),
     LastLogin: new Date(),
     Moderator: 0,
@@ -2199,7 +2545,7 @@ const makeLoginStatus = (className, postLoginSeq = postLoginSequence(), actorRec
     previousLastLogin: '',
     version: '20161102_160430',
     userIp: 2130706433,
-ticket: crypto.randomBytes(32).toString('hex'),
+    ticket: 'local-admin-ticket',
     piggyBank: null,
     purchaseTypeId: 0
 });
@@ -2520,26 +2866,17 @@ const ensureDbShape = (state) => {
 };
 
 const loadJsonDb = () => {
-    try {
-        if (fs.existsSync(dbPath)) {
-            const existing = ensureDbShape(JSON.parse(fs.readFileSync(dbPath, 'utf8')));
-            if (!Array.isArray(existing.catalog.clothes) || existing.catalog.clothes.length === 0) {
-                fs.writeFileSync(dbPath, JSON.stringify(existing, null, 2));
-            }
-            return existing;
-        }
-    } catch (err) {
-        log(`[DB] Nie udalo sie wczytac bazy, tworze nowa: ${err.message}`);
+    if (dbSource !== 'remote') {
+        dbSource = 'memory';
     }
     const created = defaultDb();
-    fs.writeFileSync(dbPath, JSON.stringify(created, null, 2));
-    log(`[DB] Utworzono lokalna baze: ${dbPath} (${created.catalog.clothes.length} ubran)`);
+    log(`[DB] Tryb pamieci RAM: nie tworze msp-db.json (${created.catalog.clothes.length} ubran)`);
     return created;
 };
 
 const loadMongoDb = async () => {
     if (!mongoUri) {
-        log('[DB] MONGODB_URI nie ustawione, uzywam msp-db.json');
+        log('[DB] MONGODB_URI nie ustawione, uzywam pamieci RAM');
         return null;
     }
 
@@ -2565,8 +2902,8 @@ const loadMongoDb = async () => {
         log(`[DB] Polaczono z MongoDB: ${mongoDbName}.${mongoStateCollection} (${state.catalog.clothes.length} ubran)`);
         return state;
     } catch (err) {
-        dbSource = 'json';
-        log(`[DB] MongoDB niedostepne (${err.message}), uzywam msp-db.json`);
+        dbSource = 'memory';
+        log(`[DB] MongoDB niedostepne (${err.message}), uzywam pamieci RAM`);
         if (mongoClient) {
             await mongoClient.close().catch(() => {});
         }
@@ -2599,7 +2936,12 @@ const saveDb = async () => {
         );
         return;
     }
-    fs.writeFileSync(dbPath, JSON.stringify(db, null, 2));
+    // Lokalny zapis do msp-db.json jest wylaczony.
+    // Gdy MongoDB albo zdalna brama nie zapisze danych, stan zostaje tylko w RAM do restartu aplikacji.
+    if (dbSource !== 'remote') {
+        dbSource = 'memory';
+    }
+    log('[DB] Pomijam zapis lokalny: msp-db.json jest wylaczony');
 };
 
 const isDevCredentials = (requestBody) => {
@@ -2663,7 +3005,7 @@ const actorFromCreateArgs = (args = [], actorId, name) => {
         diamonds: 100,
         fame: 0,
         fortune: 0,
-        skinSWF: newActor.SkinIsMale === false ? 'swf/skins/femaleskin.swf' : 'swf/skins/maleskin.swf',
+        skinSWF: newActor.SkinIsMale === false ? 'femaleskin' : 'maleskin',
         skinColor: newActor.SkinColor || '0xffd1b3',
         eyeId: Number(newActor.EyeId) || 2,
         eyeColors: newActor.EyeColors || '0x5b351c',
@@ -2728,7 +3070,7 @@ const profileSummary = () => typed('com.moviestarplanet.profile.valueObjects.Pro
     Fortune: 999999999,
     Money: 999999999,
     Diamonds: 999999999,
-ProfileText: actor.profileText || actor.ProfileText || '',
+    ProfileText: 'Local admin/dev account',
     FriendCount: 0,
     Clothes: catalogClothes(12),
     Looks: [],
@@ -2740,7 +3082,7 @@ ProfileText: actor.profileText || actor.ProfileText || '',
 const lookDataPayload = () => Buffer.from(JSON.stringify({
     actorId: DEV_ACTOR_ID,
     actorName: DEV_USERNAME,
-    skinSWF: 'swf/skins/maleskin.swf',
+    skinSWF: 'maleskin',
     skinColor: '0xffd1b3',
     eyeId: 2,
     noseId: 1,
@@ -2941,7 +3283,44 @@ const getAmfResultForMethod = async (method, args = []) => {
     }
     if (/^(Get|Load|Find|Search|Browse|List)/i.test(leaf)) {
         return genericReadResult(method, leaf);
+    }if (method.endsWith('SaveBirthInfoWithTicket')) {
+    const ticket = args && args[0] ? String(args[0]) : '';
+
+    let userRecord = null;
+
+    const usersList = Array.isArray(db.users)
+        ? db.users
+        : Object.values(db.users || {});
+
+    for (const user of usersList) {
+        if (
+            user.ticket === ticket ||
+            user.Ticket === ticket ||
+            user.loginTicket === ticket ||
+            user.LoginTicket === ticket
+        ) {
+            userRecord = user;
+            break;
+        }
     }
+
+    if (!userRecord && ticket) {
+        const ticketMatch = ticket.match(/^local-(.+?)-ticket/i);
+        if (ticketMatch) {
+            const usernameFromTicket = ticketMatch[1].toLowerCase();
+
+            userRecord = usersList.find((user) =>
+                String(user.username || user.Username || user.name || user.Name || '').toLowerCase() === usernameFromTicket
+            );
+        }
+    }
+
+    const actorRecord = userRecord && (userRecord.actor || userRecord.Actor || userRecord);
+
+    log(`[BIRTH INFO] ticket=${ticket.slice(0, 30)} actor=${actorRecord ? (actorRecord.name || actorRecord.Name || actorRecord.actorId || actorRecord.ActorId) : 'not-found'}`);
+
+    return createNewUserStatus(actorRecord);
+}
     if (/^(Save|Update|Delete|Remove|Add|Set|Send|Report|Claim|Redeem|Award|Give|Accept|Reject|Invite|Buy|Purchase|Block|Unblock)/i.test(leaf)) {
         return genericWriteResult(method, leaf);
     }
@@ -2971,7 +3350,13 @@ const handleLocalGatewayRequest = async (req, res, fallbackReason = '') => {
     }
     try {
         const result = await getAmfResultForMethod(method, decodedArgs);
-        const useLegacyEncoder = method === 'MovieStarPlanet.WebService.User.AMFUserServiceWeb.Login' || method.endsWith('LoadDataForRegisterNewUser') || isCreateNewUserMethod(method);
+        
+        const useLegacyEncoder =
+            method === 'MovieStarPlanet.WebService.User.AMFUserServiceWeb.Login' ||
+            method.endsWith('LoadDataForRegisterNewUser') ||
+            method.endsWith('SaveBirthInfoWithTicket') ||
+            isCreateNewUserMethod(method);
+
         const responseBody = buildAmfResponse(envelope ? envelope.version : 0, responseUri, result, {
             amf3: shouldUseAmf3(method, result),
             debugLabel: method,
@@ -3014,13 +3399,19 @@ app.all('/Gateway.aspx', async (req, res) => {
 });
 
 app.get('/getConfig', (req, res) => {
+    const baseUrl = requestBaseUrl(req);
     res.json({
         "version": 5,
-        "swfUrl": "http://127.0.0.1/main_20161102_160430.swf",
-        "basePath": "http://127.0.0.1/",
-        "cdnPath": "http://127.0.0.1/",
-        "isLocal": "true",
-        "language": "PL"
+        "swfUrl": `${baseUrl}Main_20161102_160430.swf`,
+        "basePath": baseUrl,
+        "cdnPath": baseUrl,
+        "assetConfigUrl": `${baseUrl}assetconfig.json`,
+        "remoteAssetBaseUrl": remoteAssetBaseUrl + "/",
+        "officialCdnPath": officialMspAssetBaseUrl + "/",
+        "isLocal": "false",
+        "language": "PL",
+        "mongoDbName": mongoDbName,
+        "mongoStateCollection": mongoStateCollection
     });
 });
 
@@ -3039,7 +3430,7 @@ app.get('/api/db/status', (req, res) => {
 app.get('/api/health', (req, res) => {
     res.json({
         ok: true,
-        mode: isServerOnly ? 'server' : 'local',
+        mode: configuredPort ? 'render' : (isServerOnly ? 'server' : 'local'),
         source: dbSource,
         mongoConnected: useRemoteGateway || Boolean(mongoClient && mongoDatabase),
         remoteGateway: useRemoteGateway ? remoteGatewayUrl : '',
@@ -3106,9 +3497,74 @@ process.on('SIGTERM', () => {
     process.exit(0);
 });
 
+const preloadSwfAssets = async () => {
+    if (process.env.PRELOAD_SWF !== '1') return;
+    if (!remoteAssetBaseUrl) return;
+
+    const manifestPath = path.join(__dirname, 'main_swf_manifest_critical.json');
+
+    if (!fs.existsSync(manifestPath)) {
+        log(`[PRELOAD SWF] brak manifestu: ${manifestPath}`);
+        return;
+    }
+
+    let list = [];
+    try {
+        list = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    } catch (err) {
+        log(`[PRELOAD SWF] blad manifestu: ${err.message}`);
+        return;
+    }
+
+    if (!Array.isArray(list)) {
+        log('[PRELOAD SWF] manifest nie jest tablica');
+        return;
+    }
+
+    const limit = Math.max(1, Number(process.env.PRELOAD_SWF_LIMIT || 4));
+    const queue = list.slice();
+    let ok = 0;
+    let fail = 0;
+
+    const worker = async () => {
+        while (queue.length) {
+            const rel = queue.shift();
+            const clean = String(rel || '').replace(/\\/g, '/').replace(/^\/+/, '');
+
+            if (!clean || !clean.toLowerCase().endsWith('.swf')) continue;
+
+            const target = path.join(assetCachePath, clean);
+
+            try {
+                if (fs.existsSync(target) && fs.statSync(target).isFile()) {
+                    ok += 1;
+                    continue;
+                }
+            } catch (_) {
+                // Gdy stat sie wysypie, probujemy pobrac plik od nowa.
+            }
+
+            const remoteUrl = `${remoteAssetBaseUrl}/${encodeURI(clean).replace(/%2F/gi, '/')}`;
+
+            try {
+                await downloadRemoteAsset(remoteUrl, target);
+                ok += 1;
+                log(`[PRELOAD SWF] OK ${clean}`);
+            } catch (err) {
+                fail += 1;
+                log(`[PRELOAD SWF] MISS ${clean} ${err.message}`);
+            }
+        }
+    };
+
+    await Promise.all(Array.from({ length: limit }, worker));
+    log(`[PRELOAD SWF] koniec ok=${ok} fail=${fail}`);
+};
+
 const start = async () => {
     db = await loadDb();
     await warmRemoteGateway();
+    await preloadSwfAssets();
     writeServerPid();
     if (configuredPort) {
         startServer(Number(configuredPort));
