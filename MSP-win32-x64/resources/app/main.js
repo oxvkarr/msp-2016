@@ -1,6 +1,7 @@
 const { app, BrowserWindow, dialog, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { execFileSync } = require('child_process');
 
 const flashPath = path.join(__dirname, 'pepflashplayer.dll');
 const debugLogPath = path.join(__dirname, 'msp-debug.log');
@@ -14,6 +15,29 @@ const fiddlerBaseUrl = (process.env.MSP_FIDDLER_BASE_URL || 'http://ipv4.fiddler
 const TERMS_VERSION = 'msp-private-server-2026-05-09';
 
 process.env.MSP_DEBUG = isDebugMode ? '1' : '0';
+process.env.MSP_ACCEPT_TERMS = isDebugMode ? '1' : (process.env.MSP_ACCEPT_TERMS || '0');
+
+const stopStaleLocalServers = () => {
+    if (process.platform !== 'win32' || !isDebugMode) return;
+
+    const script = [
+        '$ErrorActionPreference = "SilentlyContinue"',
+        '$owners = Get-NetTCPConnection -LocalPort 80,1600 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique',
+        'foreach ($owner in $owners) { if ($owner -and $owner -ne $PID) { Stop-Process -Id $owner -Force } }'
+    ].join('; ');
+
+    try {
+        execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script], {
+            stdio: 'ignore',
+            windowsHide: true
+        });
+        console.log('[PORT CLEANUP] zwolniono porty 80/1600 przed startem 2016 debug');
+    } catch (err) {
+        console.log(`[PORT CLEANUP FAIL] ${err.message}`);
+    }
+};
+
+stopStaleLocalServers();
 require('./app');
 const localHostRules = [
     'MAP 127.0.0.1translations 127.0.0.1',
@@ -85,6 +109,13 @@ const writeSettings = (settings) => {
 const ensureTermsAccepted = async () => {
     const settings = readSettings();
     if (settings.termsAcceptedVersion === TERMS_VERSION) return true;
+    if (isDebugMode || process.env.MSP_ACCEPT_TERMS === '1') {
+        writeSettings(Object.assign({}, settings, {
+            termsAcceptedVersion: TERMS_VERSION,
+            termsAcceptedAt: new Date().toISOString()
+        }));
+        return true;
+    }
 
     const result = await dialog.showMessageBox({
         type: 'info',
@@ -157,6 +188,14 @@ const removeIfExists = (targetPath) => {
 };
 
 const clearLocalCaches = async () => {
+    if (isDebugMode) {
+        debugLog('[CACHE] pominieto czyszczenie cache przy starcie debug');
+        if (useFiddlerProxy) {
+            debugLog(`[FIDDLER] proxy wlaczony: ${fiddlerProxy}`);
+        }
+        return;
+    }
+
     await session.defaultSession.clearCache();
     await session.defaultSession.clearStorageData();
     removeIfExists(path.join(__dirname, 'asset-cache'));
@@ -272,5 +311,5 @@ async function createWindow() {
     mainWindow.loadURL(`${playBaseUrl}/play.html?${PLAY_PARAMS}${isDebugMode ? '&debug=1' : ''}${useFiddlerProxy ? '&fiddler=1' : ''}`);
 }
 
-app.on('ready', createWindow);
+app.whenReady().then(createWindow);
 app.on('window-all-closed', () => app.quit());
