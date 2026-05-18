@@ -1,6 +1,8 @@
 node_modules/
 **/node_modules/
 **/.DS_Store
+MSP-win32-x64/MSP.exe
+MSP-win32-x64/MSP-Debug.exe
 **/msp-debug.log
 **/asset-cache/
 **/.wrangler/
